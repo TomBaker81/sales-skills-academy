@@ -116,10 +116,10 @@ const PIECE_KEYWORDS = {
   'cloud-voice':['phone','voice','call','pstn','isdn','voip','webex','collaborate','line'],
   'backup-dr':['backup','restore','disaster','recovery','ransomware','data loss','dr '],
   'm365':['microsoft','365','office','teams','sharepoint','licence','license','mfa','entra','conditional access'],
-  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet','contract renewal','handset','upgrade','mtd','mobile threat','edr','endpoint detection'],
+  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet','contract renewal','handset','upgrade','mtd','mobile threat','mobile threat defence','mobile threat defense','edr','endpoint detection','endpoint detection and response','device estate'],
   'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation'],
   'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
-  'managed-security':['security','monitor','soc','edr','antivirus','threat','breach','incident'],
+  'managed-security':['security','monitor','soc','edr','endpoint detection','endpoint detection and response','antivirus','threat','breach','incident'],
   'eir-services':['internet','connectivity','broadband','fibre','bandwidth','site','line speed'],
   'secure-access-edge':['vpn','zero trust','ztna','sase','branch','remote access','cloud app','shadow it'],
   'eir-support':['support','helpdesk','sla','escalation','who do you call','fix it']
