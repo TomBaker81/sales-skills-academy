@@ -234,7 +234,14 @@ function parseGeminiResponse(data){
 }
 async function callGemini(system, messages, maxTokens){
   const contents = messages.map(m=>({ role: m.role==='assistant' ? 'model' : 'user', parts:[{text:m.content}] }));
-  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:maxTokens} };
+  // Newer Gemini models "think" by default, and those internal reasoning
+  // tokens are drawn from the SAME maxOutputTokens budget as the visible
+  // answer — with a small budget, thinking alone can consume it all, leaving
+  // nothing for the actual JSON we need. thinkingBudget:0 disables that for
+  // these structured-output calls (we don't need chain-of-thought here), and
+  // padding the token budget is a second safety margin for models/params
+  // that don't fully honor thinkingBudget.
+  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:Math.max(maxTokens, 2048), thinkingConfig:{thinkingBudget:0}} };
 
   // Google's Gemini API does not send CORS headers on generateContent, so it
   // can't be called directly from a browser on any domain. The Netlify
