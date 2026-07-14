@@ -30,6 +30,7 @@ const FALLBACK_PROFILES = [
     persona:{name:'Marie Fitzgerald', role:'Operations Director (C-level)', category:'C-Level', tone:'Direct and practical, thinks in terms of production impact rather than tech jargon — businesslike, wants things to move quickly.'},
     hiddenPains:[
       {piece:'secure-network', severity:'high', detail:'shop-floor Wi-Fi drops weekly, halting handheld scanners on the production line'},
+      {piece:'cloud-voice', severity:'high', detail:'office and shop-floor phones still run on old ISDN lines, no plan in place for the network switch-off, worried about losing lines mid-production if it happens before they act'},
       {piece:'eir-services', severity:'medium', detail:'single internet line with no failover, one outage cost roughly half a day of production'},
       {piece:'eir-support', severity:'medium', detail:'juggling three different suppliers for network, phones and backup with no single point of contact'}
     ],
@@ -43,7 +44,7 @@ const FALLBACK_PROFILES = [
     hiddenPains:[
       {piece:'backup-dr', severity:'high', detail:'POS and stock data backed up locally only, no cloud copy, never restore-tested'},
       {piece:'mobile-office', severity:'medium', detail:'area manager travels between stores on a personal mobile hotspot, no secure access'},
-      {piece:'cloud-voice', severity:'low', detail:'still on ISDN lines at two of the three stores'}
+      {piece:'cloud-voice', severity:'high', detail:'two of the three stores are still on old ISDN lines, aware the network switch-off is coming but has not looked into what moving to VoIP would actually involve'}
     ],
     openingLine:"Hi — happy to chat, just so you know I look after the numbers more than the tech, so bear with me."
   },
@@ -67,6 +68,7 @@ const FALLBACK_PROFILES = [
     hiddenPains:[
       {piece:'cyber-assurance', severity:'high', detail:'no one owns security governance at all, just an IT contractor who fixes things when they break, no incident response plan of any kind exists'},
       {piece:'mobile-security', severity:'medium', detail:'clinicians use personal phones to photograph and message patient information to each other, no device management or policy in place'},
+      {piece:'cloud-voice', severity:'medium', detail:'reception still runs on an old ISDN line, hasn\u2019t looked into the switch-off timeline, worried about losing the ability to take appointment calls if it happens unexpectedly'},
       {piece:'backup-dr', severity:'low', detail:'patient records backed up to an external drive that sits in the same room as the server'}
     ],
     openingLine:"Hello — I've a few minutes between patients, so I appreciate you keeping this brief, but go ahead."
@@ -487,6 +489,7 @@ const TRAINING_SECTIONS = [
       <tr><td>Immutable backup</td><td>Even if ransomware gets in, your data can't be encrypted along with it.</td></tr>
       <tr><td>Single point of contact</td><td>One call, one number, no more chasing three different suppliers.</td></tr>
       <tr><td>MDM enrolment</td><td>A lost phone can be wiped in minutes, not left as an open door.</td></tr>
+      <tr><td>VoIP migration ahead of the ISDN/PSTN switch-off</td><td>You move on your own timeline, keeping your numbers and features intact — instead of scrambling once the old lines go dead.</td></tr>
     </table>
     <h4>If they ask about price early</h4>
     <p>It's common for a prospect to ask "how much does this cost?" before you've finished discovery. You don't need to dodge the question, but answering it properly usually means understanding their situation first. A short, honest bridge works well.</p>
@@ -1267,6 +1270,7 @@ async function generateProfileViaAPI(difficulty){
    Order them from most useful early in the call to most useful later.
 }
 ${difficultyInstructions[difficulty]}
+Roughly one in three profiles should include a cloud-voice hidden pain specifically about still running old ISDN/PSTN lines (e.g. reception, store, or site phones) with no VoIP migration plan in place ahead of the industry-wide network switch-off — make it a natural, business-specific detail (what it would cost them if those lines went down unexpectedly) rather than a generic mention, and vary the severity. The other two-thirds of profiles should use other hidden pains as normal, so this shouldn't appear on every call.
 Make each profile meaningfully different from a generic example: vary the sector, size, persona and which of the focus areas are hidden pains. The focus areas are:
 ${pieceCriteriaBlock()}`;
   const text = await callAI(system, [{role:'user', content:'Generate a new, unique SME profile now.'}], 1100);
