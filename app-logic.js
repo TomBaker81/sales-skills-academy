@@ -6,7 +6,7 @@ const FALLBACK_PROFILES = [
     persona:{name:'Aoife Byrne', role:'Owner/Founder', category:'Owner', tone:'Warm, friendly and happy to chat once she knows you\u2019re not wasting her time — a little rushed, answers in short bursts, often mid-task.'},
     hiddenPains:[
       {piece:'cloud-voice', severity:'high', detail:'missed reservation calls during peak hours, no call routing after the front desk shift ends'},
-      {piece:'backup-dr', severity:'medium', detail:'nightly backup runs but has never been restore-tested, unsure if it is immutable'},
+      {piece:'cloud-infrastructure', severity:'medium', detail:'nightly backup runs but has never been restore-tested, unsure if it is immutable'},
       {piece:'mobile-security', severity:'low', detail:'reception staff use personal phones for guest WhatsApp messages, no MDM in place'}
     ],
     openingLine:"Hi there — you've got about ten minutes, we're mid-changeover between guests. What did you want to go through?"
@@ -17,7 +17,7 @@ const FALLBACK_PROFILES = [
     whatTheyCareAbout:"Client trust and confidentiality above all — a practice's reputation lives or dies on whether clients believe their financial data is safe.",
     persona:{name:'Conor Walsh', role:'IT Manager', category:'IT/Technical', tone:'Precise and methodical, happy to go into detail once he trusts you know what you\u2019re talking about.'},
     hiddenPains:[
-      {piece:'managed-security', severity:'high', detail:'traditional antivirus only, no EDR, had a phishing near-miss last year that nearly compromised a client mailbox'},
+      {piece:'cyber-assurance', severity:'high', detail:'traditional antivirus only, no EDR, had a phishing near-miss last year that nearly compromised a client mailbox'},
       {piece:'m365', severity:'medium', detail:'on Business Standard but MFA is not enforced for all users'},
       {piece:'secure-access-edge', severity:'medium', detail:'two office locations with inconsistent VPN setup between them'}
     ],
@@ -42,7 +42,7 @@ const FALLBACK_PROFILES = [
     whatTheyCareAbout:"Keeping tills and stock systems running during trading hours, and controlling costs carefully as the business expands to new sites.",
     persona:{name:'Niamh O\u2019Sullivan', role:'Finance Director (C-level)', category:'C-Level', tone:'Budget-conscious and wants the business case, but friendly and willing to talk once she sees the relevance.'},
     hiddenPains:[
-      {piece:'backup-dr', severity:'high', detail:'POS and stock data backed up locally only, no cloud copy, never restore-tested'},
+      {piece:'cloud-infrastructure', severity:'high', detail:'POS and stock data backed up locally only, no cloud copy, never restore-tested'},
       {piece:'mobile-office', severity:'medium', detail:'area manager travels between stores on a personal mobile hotspot, no secure access'},
       {piece:'cloud-voice', severity:'high', detail:'two of the three stores are still on old ISDN lines, aware the network switch-off is coming but has not looked into what moving to VoIP would actually involve'}
     ],
@@ -69,7 +69,7 @@ const FALLBACK_PROFILES = [
       {piece:'cyber-assurance', severity:'high', detail:'no one owns security governance at all, just an IT contractor who fixes things when they break, no incident response plan of any kind exists'},
       {piece:'mobile-security', severity:'medium', detail:'clinicians use personal phones to photograph and message patient information to each other, no device management or policy in place'},
       {piece:'cloud-voice', severity:'medium', detail:'reception still runs on an old ISDN line, hasn\u2019t looked into the switch-off timeline, worried about losing the ability to take appointment calls if it happens unexpectedly'},
-      {piece:'backup-dr', severity:'low', detail:'patient records backed up to an external drive that sits in the same room as the server'}
+      {piece:'cloud-infrastructure', severity:'low', detail:'patient records backed up to an external drive that sits in the same room as the server'}
     ],
     openingLine:"Hello — I've a few minutes between patients, so I appreciate you keeping this brief, but go ahead."
   },
@@ -81,7 +81,7 @@ const FALLBACK_PROFILES = [
     hiddenPains:[
       {piece:'mobile-office', severity:'high', detail:'site managers use personal phones and hotspots on-site with no secure access back to head office systems, has caused confusion over documents before'},
       {piece:'support-services', severity:'medium', detail:'no single point of contact for IT issues, site managers waste real time chasing three different suppliers when something breaks'},
-      {piece:'backup-dr', severity:'low', detail:'project files backed up informally to a shared drive, nobody has ever tested restoring a lost project file'}
+      {piece:'cloud-infrastructure', severity:'low', detail:'project files backed up informally to a shared drive, nobody has ever tested restoring a lost project file'}
     ],
     openingLine:"Yeah? Make it quick, I don't really do sales calls — what do you actually want?"
   },
@@ -104,7 +104,7 @@ const FALLBACK_PROFILES = [
     persona:{name:'Paul Whelan', role:'Operations Director (C-level)', category:'C-Level', tone:'Warm and practical, thinks in terms of keeping the vans moving rather than technology for its own sake — happy to talk once he sees the relevance to the day-to-day.'},
     hiddenPains:[
       {piece:'mobile-security', severity:'high', detail:'mobile contract for the whole field team is up for renewal in the next couple of months, current phones have no MDM or mobile threat defence at all, and the office laptops back at base have no EDR either — nobody has looked at protection as part of the renewal, just pricing on new handsets'},
-      {piece:'backup-dr', severity:'medium', detail:'job and client records backed up locally at the office only, never restore-tested'},
+      {piece:'cloud-infrastructure', severity:'medium', detail:'job and client records backed up locally at the office only, never restore-tested'},
       {piece:'support-services', severity:'low', detail:'juggling separate suppliers for mobile, office IT and backup with no single point of contact'}
     ],
     openingLine:"Hi, yeah go on — we're actually just about to start shopping around for new phones for the team, so timing's alright."
@@ -114,14 +114,12 @@ const FALLBACK_PROFILES = [
 const PIECE_KEYWORDS = {
   'secure-network':['network','wifi','wi-fi','firewall','outage','router','vlan','segment','lan'],
   'cloud-voice':['phone','voice','call','pstn','isdn','voip','webex','collaborate','line'],
-  'backup-dr':['backup','restore','disaster','recovery','ransomware','data loss','dr '],
   'm365':['microsoft','365','office','teams','sharepoint','licence','license','mfa','entra','conditional access'],
   'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet','contract renewal','handset','upgrade','mtd','mobile threat','mobile threat defence','mobile threat defense','edr','endpoint detection','endpoint detection and response','device estate'],
-  'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation'],
+  'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation','security','monitor','soc','edr','endpoint detection','endpoint detection and response','antivirus','threat','breach','incident'],
   'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
-  'managed-security':['security','monitor','soc','edr','endpoint detection','endpoint detection and response','antivirus','threat','breach','incident'],
   'connectivity-access':['internet','connectivity','broadband','fibre','bandwidth','site','line speed','lan','wan','lan/wan','switching','switches','wiring'],
-  'cloud-infrastructure':['azure','cloud','virtual desktop','vdi','virtualisation','virtualization','migration','on-prem','on prem','physical server','servers','hosting','vpn'],
+  'cloud-infrastructure':['azure','cloud','virtual desktop','vdi','virtualisation','virtualization','migration','on-prem','on prem','physical server','servers','hosting','vpn','backup','restore','disaster','recovery','ransomware','data loss','dr '],
   'secure-access-edge':['vpn','zero trust','ztna','sase','branch','remote access','cloud app','shadow it'],
   'support-services':['support','helpdesk','sla','escalation','who do you call','fix it']
 };
@@ -372,8 +370,8 @@ const TRAINING_SECTIONS = [
   title:'Discovery Questions',
   sub:'Situation, Problem, Implication, Need-payoff — the questioning sequence used throughout this site.',
   html:`
-    <h4>Where this structure comes from</h4>
-    <p>The Situation, Problem, Implication, Need-payoff sequence follows the widely-taught questioning research popularised by Neil Rackham. It's used here as a plain, descriptive framework for internal training — not as any commercial SPIN Selling® certification or branded program. Once you've used it a few times, it starts to feel natural rather than like a formula.</p>
+    <h4>The four-step pattern</h4>
+    <p>Situation, Problem, Implication, Need-payoff — this is the questioning order used throughout this site. Once you've used it a few times it starts to feel natural, not like a formula you're forcing.</p>
     <h4>Situation questions: broad, low-pressure, and kept to a minimum</h4>
     <p>These establish context — what they have today, how things are set up. They're necessary, but they're the least valuable part of the call, and over-asking them reads as an interrogation. Use just enough to orient yourself, then move on quickly.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"How are things set up today for [area] — what are you currently using?"</div>
@@ -382,9 +380,9 @@ const TRAINING_SECTIONS = [
     <p>These surface difficulties, dissatisfactions or concerns connected to the situation they just described. This is where you stop collecting facts and start listening for something that actually matters to them.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"How's that been working for you — anything that causes friction day to day?"</div>
     <h4>Implication questions: the step most reps skip</h4>
-    <p>A stated problem isn't automatically a reason to buy. Implication questions push the prospect to work out the real cost of the problem themselves — in time, money, risk or hassle. This is what turns a mild complaint into something worth solving now, and it's the single most under-used question type in weak discovery calls.</p>
+    <p>A stated problem isn't automatically a reason to buy. Ask what it actually costs them — in time, money, risk, or hassle. That's what turns a mild complaint into something worth fixing now.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"When that happens, what does it actually cost you — lost time, frustrated staff, missed business?"</div>
-    <p>Skipping straight from Problem to pitching is the most common discovery mistake there is. Without a clear implication, your solution is solving a problem the customer hasn't yet decided is worth fixing. If you only remember one thing from this whole section, make it this one.</p>
+    <p><strong>If you remember one thing from this whole page, make it this:</strong> jumping straight from Problem to pitching, without asking what it costs them, is the single most common discovery mistake.</p>
     <h4>Need-payoff questions: let them say the value out loud</h4>
     <p>Rather than you telling them why your solution matters, a good need-payoff question gets the prospect to state the value themselves — which makes it far stickier than anything you could say.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"If that stopped happening altogether, what would that be worth to the business?"</div>
@@ -430,38 +428,22 @@ const TRAINING_SECTIONS = [
   title:'Handling Objections',
   sub:'Objections mean the prospect is still in the conversation — treat them as information, not rejection.',
   html:`
-    <h4>First: objections are a good sign, not a bad one</h4>
-    <p>It's easy for a junior rep to hear an objection and feel like the call has gone wrong. In reality, a prospect who didn't care at all would just go quiet or hang up. An objection means they're still engaged enough to explain why they're hesitant — which gives you something real to work with.</p>
-    <h4>Most objections fall into one of three types</h4>
-    <table class="train-table">
-      <tr><th>Type</th><th>What it sounds like</th><th>What's really going on</th></tr>
-      <tr><td>Dismissive</td><td>"Not interested." "Send me an email." "Too busy."</td><td>A reflex against the interruption — they haven't actually evaluated anything yet.</td></tr>
-      <tr><td>Situational</td><td>"No budget." "Bad timing." "We're slammed right now."</td><td>The idea might be fine, but their current reality makes acting on it feel hard.</td></tr>
-      <tr><td>Existing solution</td><td>"We already use someone for that." "We've a contract in place."</td><td>They have a reason to believe the problem is already handled — which may or may not be true.</td></tr>
-    </table>
-    <h4>A simple framework that works across all three: LAER</h4>
-    <ul>
-      <li><strong>Listen</strong> — let them finish completely. Don't start formulating your reply while they're still talking.</li>
-      <li><strong>Acknowledge</strong> — show you actually heard it. "That makes sense" lands better than a scripted "I understand."</li>
-      <li><strong>Explore</strong> — ask a genuine, open question to find out what's really behind the objection.</li>
-      <li><strong>Respond</strong> — address the real concern you just uncovered, not just the first thing they said.</li>
-    </ul>
-    <h4>Feel, Felt, Found — a specific technique for the Acknowledge and Explore steps</h4>
-    <div class="train-quote"><span class="qlabel">Structure</span>"I understand how you feel — other customers felt the same way at first. What they found was..."</div>
-    <p>It validates the concern, offers social proof, and reframes — all in one short structure. Use it sparingly. It starts to sound scripted if every single objection gets the exact same three words.</p>
-    <h4>Worked examples</h4>
+    <h4>First: an objection is a good sign</h4>
+    <p>Someone who didn't care at all would just go quiet or hang up. An objection means they're still listening enough to explain why they're hesitant — that's something you can actually work with.</p>
+    <h4>Five common ones, and what to say</h4>
     <div class="train-quote"><span class="qlabel">"We don't have the budget right now"</span>"That's fair — budget's usually already earmarked for things already on the roadmap. Can I ask, if this ended up saving [time/cost] each month, would it be worth revisiting when the next budget cycle opens?"</div>
     <div class="train-quote"><span class="qlabel">"We already have a provider for that"</span>"Good to know — a lot of the businesses we now work with said the same thing at first. How's that relationship working for you at the moment — any frustrations, or is it solid across the board?"</div>
     <div class="train-quote"><span class="qlabel">"Send me an email / I'm not interested"</span>"No problem, happy to. Before I do — genuinely one quick question so what I send is actually useful — [tie to your hook]?"</div>
     <div class="train-quote"><span class="qlabel">"I'd need to check with my business partner / the board"</span>"Makes total sense, this isn't just your call to make alone. What would be useful for you to bring to that conversation — would a short summary help, or would it be worth them joining a quick call directly?"</div>
     <div class="train-quote"><span class="qlabel">"We're just too busy right now"</span>"Completely understand — that's exactly when these things tend to get put off. Out of interest, is 'busy' likely to ease up in the next month or two, or is this just how things are for the foreseeable?"</div>
-    <h4>Two habits that separate strong objection handling from weak</h4>
-    <ul>
-      <li><strong>Do good discovery before you ever get to positioning.</strong> Most late-stage objections are prevented, not overcome — a prospect who's already articulated their own pain and its cost rarely objects hard at the end.</li>
-      <li><strong>Isolate the objection before you solve it.</strong> "If we could sort out [X], is there anything else that would stop you moving forward?" — this stops you solving one objection only to be hit by three more.</li>
-    </ul>
-    <h4>What to do if you genuinely don't have a good answer</h4>
-    <p>You won't always have a sharp response ready, and that's fine — especially early in your career. It's far better to be honest than to bluff. "That's a fair point, I want to give you a proper answer rather than guess — can I come back to you on that by [specific time]?" is a completely respectable thing to say, and prospects generally respect it more than a shaky improvised answer.</p>
+    <h4>Notice the pattern in all five</h4>
+    <p>Every one of those does the same three things, in order: acknowledge what they said, ask a genuine question to find out what's really behind it, then respond to that — not just the first thing they said. If you remember nothing else, remember that order.</p>
+    <h4>If you want a name for that pattern: LAER</h4>
+    <p><strong>Listen</strong> fully, without planning your reply while they're still talking. <strong>Acknowledge</strong> it — "that makes sense" beats a scripted "I understand." <strong>Explore</strong> with a genuine question. <strong>Respond</strong> to what you actually find, not just the surface objection.</p>
+    <h4>Isolate before you solve</h4>
+    <p>Before spending time solving one objection, check there isn't a second one hiding behind it: "If we could sort out [X], is there anything else that would stop you moving forward?" Saves you solving one thing only to get hit with three more.</p>
+    <h4>If you genuinely don't know the answer</h4>
+    <p>That's fine, especially early on. Honesty beats bluffing every time. "That's a fair point, I want to give you a proper answer rather than guess — can I come back to you on that by [specific time]?" is a completely respectable thing to say.</p>
     <div class="train-dodont">
       <div class="train-do"><span class="dd-label">Do</span><ul>
         <li>Treat an objection as a request for more information</li>
@@ -476,7 +458,7 @@ const TRAINING_SECTIONS = [
         <li>Bluff an answer you're not sure about</li>
       </ul></div>
     </div>
-    <h4>Quick checklist for handling an objection</h4>
+    <h4>Quick checklist</h4>
     <ul>
       <li>I let them finish speaking before I responded</li>
       <li>I acknowledged the objection before addressing it</li>
@@ -534,40 +516,35 @@ const TRAINING_SECTIONS = [
 },
 {
   title:'BANT Qualification',
-  sub:'Budget, Authority, Need, Timeline — a fast way to tell a real opportunity from a polite conversation.',
+  sub:'Budget, Authority, Need, Timeline — four quick checks to tell a real opportunity from a nice chat.',
   html:`
-    <h4>What BANT is for</h4>
-    <p>BANT was originally developed at IBM to help reps quickly sort viable deals from tyre-kickers. It's best treated as a first-pass filter for shorter, SME-scale sales cycles — not a rigid checklist, and not a substitute for genuine discovery. The best BANT practitioners rarely say the literal words "budget, authority, need or timeline" out loud on a call.</p>
+    <h4>What it's actually for</h4>
+    <p>Before you invest more time in a conversation, check four things: do they have money for this, can the person you're talking to actually say yes, is there a real problem, and is there any reason to move now. You don't need to say the words "budget, authority, need, timeline" out loud — just weave the questions in naturally.</p>
     <div class="bant-grid">
-      <div class="bant-card"><span class="bant-letter">B</span><h5>Budget</h5><p>Not just "do they have money" — whether funds are allocated, accessible and realistic for this kind of purchase.</p><div class="bant-ask">"How do you typically fund something like this — is it a set budget, or something you'd build a case for?"</div></div>
-      <div class="bant-card"><span class="bant-letter">A</span><h5>Authority</h5><p>Who can approve it, who influences it, and who controls the purse strings — often three different people.</p><div class="bant-ask">"Who else would need to be comfortable with this for it to move forward?"</div></div>
-      <div class="bant-card"><span class="bant-letter">N</span><h5>Need</h5><p>A real, specific, costed problem — not a vague "sure, that'd be handy." This is where your discovery work does the heavy lifting.</p><div class="bant-ask">"Walk me through what happens today when [the problem] comes up."</div></div>
-      <div class="bant-card"><span class="bant-letter">T</span><h5>Timeline</h5><p>What's actually driving the timing — a renewal, a growth plan, an incident — versus no real urgency at all.</p><div class="bant-ask">"What's driving the timing on this — is there something specific pushing it, or is it more exploratory for now?"</div></div>
+      <div class="bant-card"><span class="bant-letter">B</span><h5>Budget</h5><p>Is there money for this, realistically?</p><div class="bant-ask">"How do you typically fund something like this — a set budget, or something you'd build a case for?"</div></div>
+      <div class="bant-card"><span class="bant-letter">A</span><h5>Authority</h5><p>Can they say yes, or does someone else need to agree?</p><div class="bant-ask">"Who else would need to be comfortable with this for it to move forward?"</div></div>
+      <div class="bant-card"><span class="bant-letter">N</span><h5>Need</h5><p>Is there a real, specific problem — not just "sure, that'd be handy"?</p><div class="bant-ask">"Walk me through what happens today when [the problem] comes up."</div></div>
+      <div class="bant-card"><span class="bant-letter">T</span><h5>Timeline</h5><p>Is anything actually pushing them to act now?</p><div class="bant-ask">"What's driving the timing on this — is there something specific pushing it, or is it more exploratory for now?"</div></div>
     </div>
-    <h4>Lead with Need, not Budget</h4>
-    <p>Asking about budget or authority before establishing a real need feels transactional and puts prospects on the defensive. Discovering the problem first, and letting budget and authority come up naturally once the pain is established, keeps the conversation consultative rather than turning it into an interrogation.</p>
-    <h4>Score it, don't just tick it</h4>
-    <p>Rate each of the four dimensions 0 to 3 based on actual evidence from the conversation — a specific number, a named stakeholder, a stated event — rather than a gut feeling. A vague "budget isn't an issue" is weak evidence. "We've got €15k earmarked for this and our ops director signs off anything under €20k" is strong evidence.</p>
-    <h4>A short worked example</h4>
-    <p>Notice how none of these questions sound like a checklist — they follow naturally from what the customer just said.</p>
+    <h4>Always start with Need</h4>
+    <p>Asking about budget or who-decides too early feels like an interrogation. Find the real problem first — budget and authority come up naturally once someone actually wants the problem fixed.</p>
+    <h4>What a natural version sounds like</h4>
     <div class="train-quote"><span class="qlabel">Need</span>Rep: "How's that been working for you?" Customer: "Honestly, it's a pain — we lose a day every few months when it goes down."</div>
     <div class="train-quote"><span class="qlabel">Timeline</span>Rep: "Has that happened recently, or is it more of an ongoing thing?" Customer: "Twice this quarter already."</div>
     <div class="train-quote"><span class="qlabel">Authority</span>Rep: "If we looked at fixing this, would that be your call, or is there someone else who'd need to weigh in?" Customer: "I'd bring it to our ops director, but I'd be the one pushing it."</div>
     <div class="train-quote"><span class="qlabel">Budget</span>Rep: "Roughly, is this the kind of thing that would come out of an existing budget, or would it need a new case built?" Customer: "We'd probably need to build a case, but if the numbers make sense it's not a hard sell internally."</div>
-    <h4>Common BANT mistakes</h4>
+    <h4>Common mistakes</h4>
     <ul>
-      <li><strong>Treating it as a rigid checklist.</strong> Reciting four questions in sequence sounds like an interrogation — weave them into the natural flow instead.</li>
-      <li><strong>Disqualifying too early on budget.</strong> "No budget" often means "not currently allocated," not "could never be found" — explore the value before writing it off.</li>
-      <li><strong>Assuming one decision-maker.</strong> Especially past the smallest businesses, there's often an influencer and a budget-holder in addition to whoever you're speaking to.</li>
-      <li><strong>Accepting a shallow Need statement.</strong> "Yeah, that'd be useful" isn't a qualified need — push through to Implication before treating it as one.</li>
+      <li><strong>Reciting it like a checklist.</strong> Weave the four questions into the conversation, don't fire them one after another.</li>
+      <li><strong>Writing someone off on budget too fast.</strong> "No budget" usually means "not allocated yet," not "never possible."</li>
+      <li><strong>Assuming there's only one decision-maker.</strong> There's often someone else who needs to be happy too.</li>
+      <li><strong>Accepting a vague need.</strong> "Yeah, that'd be useful" isn't a real need yet — dig one level deeper.</li>
     </ul>
-    <h4>How this connects to the rest of the site</h4>
-    <p>The Test Your Knowledge quiz and the Virtual Sales Call are both really BANT and structured discovery in practice: Situation and Problem questions build toward Need, Implication questions build the case that makes Budget conversations easier, and Need-payoff naturally surfaces Timeline and Authority. Qualification level (None → Surface → Emerging → Qualified) used throughout this site is effectively a live BANT-and-Need scorecard for each area.</p>
-    <h4>Quick checklist for qualifying an opportunity</h4>
+    <h4>Quick checklist</h4>
     <ul>
-      <li>I know what the specific need is, not just a general area of interest</li>
-      <li>I have a sense of who else needs to agree before this moves forward</li>
-      <li>I know roughly how this kind of spend gets approved</li>
+      <li>I know the specific need, not just a general area of interest</li>
+      <li>I know who else needs to agree before this moves forward</li>
+      <li>I have a rough sense of how this kind of spend gets approved</li>
       <li>I know what's driving the timing, if anything</li>
     </ul>`
 },
