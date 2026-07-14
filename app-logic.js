@@ -31,8 +31,8 @@ const FALLBACK_PROFILES = [
     hiddenPains:[
       {piece:'secure-network', severity:'high', detail:'shop-floor Wi-Fi drops weekly, halting handheld scanners on the production line'},
       {piece:'cloud-voice', severity:'high', detail:'office and shop-floor phones still run on old ISDN lines, no plan in place for the network switch-off, worried about losing lines mid-production if it happens before they act'},
-      {piece:'eir-services', severity:'medium', detail:'single internet line with no failover, one outage cost roughly half a day of production'},
-      {piece:'eir-support', severity:'medium', detail:'juggling three different suppliers for network, phones and backup with no single point of contact'}
+      {piece:'connectivity-access', severity:'medium', detail:'single internet line with no failover, one outage cost roughly half a day of production'},
+      {piece:'support-services', severity:'medium', detail:'juggling three different suppliers for network, phones and backup with no single point of contact'}
     ],
     openingLine:"Right, go ahead — fair warning, I'm on the factory floor, so if I go quiet that's why."
   },
@@ -80,7 +80,7 @@ const FALLBACK_PROFILES = [
     persona:{name:'Tom Brogan', role:'Owner/Founder', category:'Owner', tone:'Gruff and skeptical of sales calls, visibly impatient at first — needs a genuinely sharp, relevant question before he opens up at all. Never abusive, just hard-won.'},
     hiddenPains:[
       {piece:'mobile-office', severity:'high', detail:'site managers use personal phones and hotspots on-site with no secure access back to head office systems, has caused confusion over documents before'},
-      {piece:'eir-support', severity:'medium', detail:'no single point of contact for IT issues, site managers waste real time chasing three different suppliers when something breaks'},
+      {piece:'support-services', severity:'medium', detail:'no single point of contact for IT issues, site managers waste real time chasing three different suppliers when something breaks'},
       {piece:'backup-dr', severity:'low', detail:'project files backed up informally to a shared drive, nobody has ever tested restoring a lost project file'}
     ],
     openingLine:"Yeah? Make it quick, I don't really do sales calls — what do you actually want?"
@@ -105,7 +105,7 @@ const FALLBACK_PROFILES = [
     hiddenPains:[
       {piece:'mobile-security', severity:'high', detail:'mobile contract for the whole field team is up for renewal in the next couple of months, current phones have no MDM or mobile threat defence at all, and the office laptops back at base have no EDR either — nobody has looked at protection as part of the renewal, just pricing on new handsets'},
       {piece:'backup-dr', severity:'medium', detail:'job and client records backed up locally at the office only, never restore-tested'},
-      {piece:'eir-support', severity:'low', detail:'juggling separate suppliers for mobile, office IT and backup with no single point of contact'}
+      {piece:'support-services', severity:'low', detail:'juggling separate suppliers for mobile, office IT and backup with no single point of contact'}
     ],
     openingLine:"Hi, yeah go on — we're actually just about to start shopping around for new phones for the team, so timing's alright."
   }
@@ -120,10 +120,10 @@ const PIECE_KEYWORDS = {
   'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation'],
   'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
   'managed-security':['security','monitor','soc','edr','endpoint detection','endpoint detection and response','antivirus','threat','breach','incident'],
-  'eir-services':['internet','connectivity','broadband','fibre','bandwidth','site','line speed','lan','wan','lan/wan','switching','switches','wiring'],
+  'connectivity-access':['internet','connectivity','broadband','fibre','bandwidth','site','line speed','lan','wan','lan/wan','switching','switches','wiring'],
   'cloud-infrastructure':['azure','cloud','virtual desktop','vdi','virtualisation','virtualization','migration','on-prem','on prem','physical server','servers','hosting','vpn'],
   'secure-access-edge':['vpn','zero trust','ztna','sase','branch','remote access','cloud app','shadow it'],
-  'eir-support':['support','helpdesk','sla','escalation','who do you call','fix it']
+  'support-services':['support','helpdesk','sla','escalation','who do you call','fix it']
 };
 const PROBE_WORDS = ['how often','impact','cost','who','when','budget','risk','happen if','tested','managed','policy','plan','urgent','priority','how many','how long','what if'];
 
