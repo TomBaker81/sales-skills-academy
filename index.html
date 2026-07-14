@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Skills Academy — SME Discovery & Qualification Training</title>
+<meta name="description" content="Sales training, a discovery-question knowledge quiz, and live AI-powered virtual sales calls for SME account managers.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="login-gate" style="position:fixed;inset:0;background:#23283C;display:flex;align-items:center;justify-content:center;z-index:999;">
+  <div style="background:#F8F5EE;border-radius:16px;padding:32px;max-width:340px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,.35);">
+    <h2 style="font-family:'Manrope',sans-serif;font-size:20px;font-weight:800;color:#23283C;margin:0 0 6px;">Sales Skills Academy</h2>
+    <p style="font-size:13px;color:#5B6272;margin:0 0 18px;">Internal tool — please sign in.</p>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12.5px;font-weight:700;color:#23283C;margin-bottom:5px;">Username</label>
+      <input type="text" id="login-user" autocomplete="off" style="width:100%;padding:10px 12px;border:1.5px solid #E7E2D4;border-radius:10px;font-size:14px;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:12.5px;font-weight:700;color:#23283C;margin-bottom:5px;">Password</label>
+      <input type="password" id="login-pass" autocomplete="off" style="width:100%;padding:10px 12px;border:1.5px solid #E7E2D4;border-radius:10px;font-size:14px;box-sizing:border-box;">
+    </div>
+    <button id="login-submit" style="width:100%;padding:12px;border:none;border-radius:99px;background:#01C088;color:#171B2A;font-weight:700;font-size:14px;cursor:pointer;">Sign In</button>
+    <div id="login-error" style="display:none;color:#B54A38;font-size:12.5px;margin-top:10px;"></div>
+  </div>
+</div>
+<script src="login.js"></script>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brandrow">
+      <div class="brand">
+        <div class="brand-mark">🎯</div>
+        <div>
+          <h1>Sales Skills Academy</h1>
+          <p>SME discovery, qualification and objection-handling training</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="pill-tag" id="header-mode-pill">Offline Practice Mode</span>
+        <button class="icon-btn" id="btn-open-settings" title="AI provider settings" aria-label="Settings">⚙</button>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-view="home">Overview</button>
+      <button class="tab-btn" data-view="training">Sales Training</button>
+      <button class="tab-btn" data-view="qual">Test Your Knowledge</button>
+      <button class="tab-btn" data-view="coach">Virtual Sales Call</button>
+    </nav>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- ============ HOME / OVERVIEW ============ -->
+  <section id="view-home">
+    <div class="hero">
+      <h2>Ask better questions. Qualify faster.</h2>
+      <p>Every focus area below runs a full structured discovery path — Situation, Problem, Implication and a Need‑payoff close — not just a single question and a guess. Answer as the customer would, and the tool scores the opportunity in real time. Or jump into the Virtual Sales Call to run the whole thing live against a freshly generated SME, with no time limit.</p>
+      <div class="hero-cta">
+        <button class="btn btn-primary" id="btn-goto-coach">Launch Virtual Sales Call →</button>
+        <button class="btn btn-outline" id="btn-goto-training">Start with Sales Training</button>
+      </div>
+    </div>
+
+    <p class="section-label">The 11 focus areas</p>
+    <div class="piece-grid" id="piece-grid"></div>
+
+    <div class="spin-key">
+      <div class="sk-item"><span class="sk-badge" style="background:#00996C;">S</span> Situation — broad, open discovery</div>
+      <div class="sk-item"><span class="sk-badge" style="background:#B9791F;">P</span> Problem — surfaces a real difficulty</div>
+      <div class="sk-item"><span class="sk-badge" style="background:#4A3653;">I</span> Implication — what it actually costs them</div>
+      <div class="sk-item"><span class="sk-badge" style="background:#23283C;">N</span> Need‑payoff — the question that closes it</div>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-faint);margin:8px 2px 0;">This structure follows the widely-taught Situation–Problem–Implication–Need-payoff questioning sequence popularised by Neil Rackham's sales research. It's used here purely as a descriptive framework for internal training, not as any commercial SPIN Selling® program.</p>
+
+    <div class="session-log">
+      <p class="section-label">This session</p>
+      <div id="session-log-body"><p class="log-empty">No areas assessed yet — pick a focus area above to begin.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ SALES TRAINING ============ -->
+  <section id="view-training" class="hidden">
+    <div class="hero" style="padding-top:38px;">
+      <h2>Sales Training</h2>
+      <p>The core skills every call draws on — opening well, asking questions that actually uncover something, handling pushback without getting defensive, positioning the fix in the customer's terms, and knowing when an opportunity is genuinely worth pursuing. Work through these before the knowledge quiz and the virtual call — they're the "why" behind both.</p>
+    </div>
+    <div id="training-body"></div>
+  </section>
+
+  <!-- ============ TEST YOUR KNOWLEDGE ============ -->
+  <section id="view-qual" class="hidden">
+    <div class="qual-wrap">
+      <button class="btn btn-ghost qual-back" id="btn-qual-back">← All focus areas</button>
+      <div class="qual-header">
+        <div class="pc-icon" id="qh-icon"></div>
+        <div>
+          <h2 id="qh-title"></h2>
+          <p id="qh-sub"></p>
+        </div>
+      </div>
+      <div class="stepper" id="qh-stepper"></div>
+      <button class="crit-toggle" id="btn-crit-toggle">Show qualification criteria for this area ▾</button>
+      <div class="crit-panel" id="crit-panel"></div>
+      <div id="qual-body"></div>
+    </div>
+  </section>
+
+  <!-- ============ VIRTUAL SALES CALL ============ -->
+  <section id="view-coach" class="hidden">
+    <div class="coach-top">
+      <div>
+        <h2>Virtual Sales Call</h2>
+        <p>A fresh SME profile every time — different industry, size and the person you're speaking to, generated live so it's never the same call twice. Run a real discovery conversation for as long as you need and watch the panel score you live.</p>
+      </div>
+      <div id="mode-badge" class="mode-badge"></div>
+    </div>
+
+    <div id="coach-idle" style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);text-align:center;padding:44px 30px;">
+      <h3 style="margin-bottom:8px;font-family:var(--font-head);color:var(--navy);">Ready when you are</h3>
+      <p style="max-width:460px;margin:0 auto 20px;font-size:14.5px;line-height:1.6;color:var(--ink-soft);" id="coach-idle-copy">Generate a new company and persona, then run a discovery conversation for as long as you like. You'll get a live qualification score as you go, and a full scorecard at the end.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-new-scenario">Generate New Scenario →</button>
+        <button class="btn btn-outline" id="btn-open-settings-2">⚙ AI Provider Settings</button>
+      </div>
+    </div>
+
+    <div id="coach-active" class="hidden">
+      <div class="profile-card">
+        <div class="profile-avatar" id="pf-avatar"></div>
+        <div class="profile-meta">
+          <h3 id="pf-name"></h3>
+          <div id="pf-company" style="font-size:13.5px;font-weight:700;color:var(--teal);margin:-2px 0 8px;"></div>
+          <span class="role-tag" id="pf-role"></span>
+          <span class="role-tag" id="pf-industry"></span>
+          <span class="role-tag" id="pf-size"></span>
+          <p id="pf-desc"></p>
+        </div>
+        <button class="icon-btn" id="btn-refresh-scenario" title="Generate a fresh scenario" aria-label="Refresh scenario">↻</button>
+      </div>
+
+      <div class="coach-grid">
+        <div class="chat-panel">
+          <div class="chat-scroll" id="chat-scroll">
+            <div class="chat-empty" id="chat-empty">Open with a broad Situation question about one of the focus areas — e.g. "How's your network holding up day to day?"</div>
+          </div>
+          <div class="chat-footer-row">
+            <span class="hint-text" id="chat-hint">Situation → Problem → Implication → Need‑payoff. Type your question as you'd say it out loud.</span>
+            <label class="voice-toggle" id="voice-toggle-wrap" style="display:none;">
+              <input type="checkbox" id="voice-toggle"> 🔊 Voice replies
+            </label>
+            <button class="btn btn-ghost" id="btn-hint" style="flex-shrink:0;">💡 Hint</button>
+          </div>
+          <div class="chat-input-row">
+            <button class="btn btn-outline" id="btn-mic" style="flex-shrink:0;display:none;" title="Speak your question">🎤</button>
+            <textarea id="chat-input" rows="1" placeholder="Ask your discovery question…"></textarea>
+            <button class="btn btn-dark" id="btn-send">Send</button>
+          </div>
+        </div>
+
+        <div class="side-panel">
+          <h4>Live qualification</h4>
+          <p class="side-sub">Best signal reached per area this call</p>
+          <div class="score-gauge">
+            <div class="num" id="gauge-num">0</div>
+            <div class="lvl" id="gauge-lvl">Discovery Stage</div>
+          </div>
+          <div class="live-counter" id="live-counter">0 questions asked · 0/11 areas touched</div>
+          <div class="last-feedback hidden" id="last-feedback"></div>
+          <div id="area-rows"></div>
+          <div class="coach-actions">
+            <button class="btn btn-outline" id="btn-refresh-scenario-2">↻ New Scenario</button>
+            <button class="btn btn-outline" id="btn-end-scenario" style="flex:1;">Score Me Now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">Internal sales training and discovery practice tool</div>
+</div>
+
+<!-- ============ SCORECARD MODAL ============ -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <h2>Conversation Scorecard</h2>
+    <p class="modal-sub" id="modal-sub"></p>
+    <div class="overall-banner" id="overall-banner">
+      <div class="score-num" id="modal-score-num">—</div>
+      <div>
+        <div class="score-lvl" id="modal-score-lvl">—</div>
+        <div style="font-size:12.5px;opacity:.85;" id="modal-score-sub"></div>
+      </div>
+    </div>
+    <div class="modal-section">
+      <h4>Areas covered</h4>
+      <div class="modal-grid" id="modal-areas"></div>
+    </div>
+    <div class="modal-section" id="modal-missed-wrap">
+      <h4>Pains you didn't uncover</h4>
+      <ul id="modal-missed"></ul>
+    </div>
+    <div class="modal-grid">
+      <div class="modal-section" id="modal-strengths-wrap"><h4>What worked well</h4><ul id="modal-strengths"></ul></div>
+      <div class="modal-section" id="modal-improve-wrap"><h4>What needs work</h4><ul id="modal-improve"></ul></div>
+    </div>
+    <div class="modal-section">
+      <h4>Coach's summary</h4>
+      <p class="modal-summary" id="modal-summary"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-modal-new">Start New Scenario</button>
+      <button class="btn btn-outline" id="btn-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS MODAL ============ -->
+<div class="modal-backdrop" id="settings-backdrop">
+  <div class="modal" style="max-width:520px;">
+    <h2>AI Provider Settings</h2>
+    <p class="modal-sub">Bring your own key from any of these providers — this app doesn't ship with one. Your key is used only in this browser to call the provider directly.</p>
+
+    <div class="field-row">
+      <label>Provider</label>
+      <div class="provider-choice" id="provider-choice">
+        <button class="provider-opt" data-provider="anthropic">Claude<br><span style="font-weight:500;">(Anthropic)</span></button>
+        <button class="provider-opt" data-provider="openai">ChatGPT<br><span style="font-weight:500;">(OpenAI)</span></button>
+        <button class="provider-opt" data-provider="gemini">Gemini<br><span style="font-weight:500;">(Google)</span></button>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <label for="settings-key">API key</label>
+      <input type="password" id="settings-key" placeholder="Paste your API key" autocomplete="off">
+      <div class="field-hint" id="settings-key-hint"></div>
+    </div>
+
+    <div class="field-row">
+      <label for="settings-model">Model</label>
+      <input type="text" id="settings-model">
+      <div class="field-hint">Editable — providers rename and retire models over time, so update this if a call fails.</div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" id="btn-settings-save">Save</button>
+      <button class="btn btn-outline btn-sm" id="btn-settings-test">Test Connection</button>
+      <button class="btn btn-ghost btn-sm" id="btn-settings-clear">Clear Key</button>
+    </div>
+    <div class="settings-status" id="settings-status"></div>
+
+    <p class="privacy-note">Your key is sent directly from this browser to the provider's own API — it never passes through any other server, and this page never stores or transmits it anywhere else. If your browser supports it, the key is remembered locally on this device only; otherwise you'll need to re-enter it each visit. Remove it any time with "Clear Key".</p>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="btn-settings-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="app-data-1.js"></script>
+<script src="app-data-2.js"></script>
+<script src="app-logic.js"></script>
+</body>
+</html>

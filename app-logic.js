@@ -1,0 +1,1501 @@
+const FALLBACK_PROFILES = [
+  {
+    companyName:'The Harbour View Hotel', industry:'Boutique hotel', employees:34, difficulty:'warm',
+    description:"A family-run hotel with an on-site restaurant and a small events space, welcoming both business and leisure guests. Front desk and reservations handle a steady flow of calls and walk-ins.",
+    whatTheyCareAbout:"Guest reviews, repeat bookings, and the events space running smoothly — anything that touches the guest experience matters more than the technology behind it.",
+    persona:{name:'Aoife Byrne', role:'Owner/Founder', category:'Owner', tone:'Warm, friendly and happy to chat once she knows you\u2019re not wasting her time — a little rushed, answers in short bursts, often mid-task.'},
+    hiddenPains:[
+      {piece:'cloud-voice', severity:'high', detail:'missed reservation calls during peak hours, no call routing after the front desk shift ends'},
+      {piece:'backup-dr', severity:'medium', detail:'nightly backup runs but has never been restore-tested, unsure if it is immutable'},
+      {piece:'mobile-security', severity:'low', detail:'reception staff use personal phones for guest WhatsApp messages, no MDM in place'}
+    ],
+    openingLine:"Hi there — you've got about ten minutes, we're mid-changeover between guests. What did you want to go through?"
+  },
+  {
+    companyName:'Walsh & Kearney Accountants', industry:'Accountancy practice', employees:22, difficulty:'warm',
+    description:"An established accountancy practice serving local business clients, with a busy seasonal spike around tax deadlines. Staff regularly handle sensitive client financial data.",
+    whatTheyCareAbout:"Client trust and confidentiality above all — a practice's reputation lives or dies on whether clients believe their financial data is safe.",
+    persona:{name:'Conor Walsh', role:'IT Manager', category:'IT/Technical', tone:'Precise and methodical, happy to go into detail once he trusts you know what you\u2019re talking about.'},
+    hiddenPains:[
+      {piece:'managed-security', severity:'high', detail:'traditional antivirus only, no EDR, had a phishing near-miss last year that nearly compromised a client mailbox'},
+      {piece:'m365', severity:'medium', detail:'on Business Standard but MFA is not enforced for all users'},
+      {piece:'secure-access-edge', severity:'medium', detail:'two office locations with inconsistent VPN setup between them'}
+    ],
+    openingLine:"Hi, thanks for the call — I've a client deadline in about twenty minutes, but go ahead, what's this about?"
+  },
+  {
+    companyName:'Fitzgerald Precision Engineering', industry:'Contract manufacturer', employees:85, difficulty:'brisk',
+    description:"A contract manufacturer running a single production site with handheld scanners across the shop floor, plus a small distribution operation attached. Growing steadily with a few new client contracts recently won.",
+    whatTheyCareAbout:"Keeping the production line moving and hitting delivery deadlines for clients — any downtime translates directly into missed targets and awkward calls to customers.",
+    persona:{name:'Marie Fitzgerald', role:'Operations Director (C-level)', category:'C-Level', tone:'Direct and practical, thinks in terms of production impact rather than tech jargon — businesslike, wants things to move quickly.'},
+    hiddenPains:[
+      {piece:'secure-network', severity:'high', detail:'shop-floor Wi-Fi drops weekly, halting handheld scanners on the production line'},
+      {piece:'eir-services', severity:'medium', detail:'single internet line with no failover, one outage cost roughly half a day of production'},
+      {piece:'eir-support', severity:'medium', detail:'juggling three different suppliers for network, phones and backup with no single point of contact'}
+    ],
+    openingLine:"Right, go ahead — fair warning, I'm on the factory floor, so if I go quiet that's why."
+  },
+  {
+    companyName:'O\u2019Sullivan\u2019s Home & Garden', industry:'Multi-site retailer', employees:48, difficulty:'warm',
+    description:"A family-run retail group with three stores across two counties, steadily growing and weighing up a fourth location. Store managers travel between sites regularly.",
+    whatTheyCareAbout:"Keeping tills and stock systems running during trading hours, and controlling costs carefully as the business expands to new sites.",
+    persona:{name:'Niamh O\u2019Sullivan', role:'Finance Director (C-level)', category:'C-Level', tone:'Budget-conscious and wants the business case, but friendly and willing to talk once she sees the relevance.'},
+    hiddenPains:[
+      {piece:'backup-dr', severity:'high', detail:'POS and stock data backed up locally only, no cloud copy, never restore-tested'},
+      {piece:'mobile-office', severity:'medium', detail:'area manager travels between stores on a personal mobile hotspot, no secure access'},
+      {piece:'cloud-voice', severity:'low', detail:'still on ISDN lines at two of the three stores'}
+    ],
+    openingLine:"Hi — happy to chat, just so you know I look after the numbers more than the tech, so bear with me."
+  },
+  {
+    companyName:'Kelly Freight & Logistics', industry:'Freight & logistics', employees:112, difficulty:'brisk',
+    description:"An established freight and distribution business with a large fleet of drivers and warehouse staff working across multiple depots. Growth has meant more devices and more sites than a few years ago.",
+    whatTheyCareAbout:"On-time delivery and driver safety — anything that risks a missed delivery window or exposes the business to liability is what actually keeps him up at night.",
+    persona:{name:'Darragh Kelly', role:'Operations Director (C-level)', category:'C-Level', tone:'Blunt and time-pressed, wants the point made quickly, but not unfriendly about it.'},
+    hiddenPains:[
+      {piece:'mobile-security', severity:'high', detail:'over a hundred drivers and warehouse staff on a real mix of BYOD and company phones with zero management, several devices have gone missing over the years with no way to wipe them'},
+      {piece:'cyber-assurance', severity:'medium', detail:'a large customer has started asking for evidence of security governance as part of a contract renewal, and there is nothing formal to show them'},
+      {piece:'secure-access-edge', severity:'low', detail:'depot sites connect back to head office with inconsistent, informally-configured VPNs'}
+    ],
+    openingLine:"Go on then, but make it quick — I'm between two calls with drivers this morning."
+  },
+  {
+    companyName:'Brennan Family Practice', industry:'Healthcare practice', employees:19, difficulty:'warm',
+    description:"A well-regarded local healthcare practice with several clinicians seeing patients daily. Handles a steady stream of sensitive patient records and appointment scheduling.",
+    whatTheyCareAbout:"Patient trust and continuity of care — anything that risks patient data or disrupts appointments directly threatens the practice's reputation in a small community.",
+    persona:{name:'Dr. Fiona Brennan', role:'Owner/Founder', category:'Owner', tone:'Warm and personable, though thoughtful about patient data — happy to talk once she understands why you\u2019re asking.'},
+    hiddenPains:[
+      {piece:'cyber-assurance', severity:'high', detail:'no one owns security governance at all, just an IT contractor who fixes things when they break, no incident response plan of any kind exists'},
+      {piece:'mobile-security', severity:'medium', detail:'clinicians use personal phones to photograph and message patient information to each other, no device management or policy in place'},
+      {piece:'backup-dr', severity:'low', detail:'patient records backed up to an external drive that sits in the same room as the server'}
+    ],
+    openingLine:"Hello — I've a few minutes between patients, so I appreciate you keeping this brief, but go ahead."
+  },
+  {
+    companyName:'Brogan Construction', industry:'Construction contractor', employees:64, difficulty:'dismissive',
+    description:"A mid-sized construction contractor running several active sites at once, with site managers and subcontractors coordinating constantly by phone. Deadlines and weather delays make every week unpredictable.",
+    whatTheyCareAbout:"Hitting project deadlines and keeping sites running without disputes — he's had every kind of salesperson call him and has little patience for another pitch that wastes his time.",
+    persona:{name:'Tom Brogan', role:'Owner/Founder', category:'Owner', tone:'Gruff and skeptical of sales calls, visibly impatient at first — needs a genuinely sharp, relevant question before he opens up at all. Never abusive, just hard-won.'},
+    hiddenPains:[
+      {piece:'mobile-office', severity:'high', detail:'site managers use personal phones and hotspots on-site with no secure access back to head office systems, has caused confusion over documents before'},
+      {piece:'eir-support', severity:'medium', detail:'no single point of contact for IT issues, site managers waste real time chasing three different suppliers when something breaks'},
+      {piece:'backup-dr', severity:'low', detail:'project files backed up informally to a shared drive, nobody has ever tested restoring a lost project file'}
+    ],
+    openingLine:"Yeah? Make it quick, I don't really do sales calls — what do you actually want?"
+  },
+  {
+    companyName:'Nolan Creative Agency', industry:'Marketing agency', employees:28, difficulty:'dismissive',
+    description:"A creative marketing agency serving mid-sized brand clients, juggling several campaigns at once with tight creative and delivery deadlines. Client work is entirely digital and deadline-driven.",
+    whatTheyCareAbout:"Protecting client campaign work and creative assets, and keeping the agency looking sharp and modern to clients — nothing undermines credibility faster than looking technologically behind.",
+    persona:{name:'Sinead Nolan', role:'Operations Director (C-level)', category:'C-Level', tone:'Sharp, a little dismissive at first, clearly has heard a hundred sales pitches — needs the rep to demonstrate real relevance quickly or she will end the call. Professional throughout, never rude.'},
+    hiddenPains:[
+      {piece:'m365', severity:'high', detail:'still on old individual Office licences with no central identity management, a freelancer\u2019s account was compromised last year and nobody noticed for weeks'},
+      {piece:'mobile-security', severity:'medium', detail:'creative staff use personal laptops and phones for client campaign files with no device management at all'},
+      {piece:'secure-access-edge', severity:'low', detail:'fully remote-friendly team connecting from home networks with no consistent secure access policy'}
+    ],
+    openingLine:"I've got about ninety seconds before my next call — what's this actually about?"
+  }
+];
+
+const PIECE_KEYWORDS = {
+  'secure-network':['network','wifi','wi-fi','firewall','outage','router','vlan','segment','lan'],
+  'cloud-voice':['phone','voice','call','pstn','isdn','voip','webex','collaborate','line'],
+  'backup-dr':['backup','restore','disaster','recovery','ransomware','data loss','dr '],
+  'm365':['microsoft','365','office','teams','sharepoint','licence','license','mfa','entra','conditional access'],
+  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet'],
+  'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation'],
+  'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
+  'managed-security':['security','monitor','soc','edr','antivirus','threat','breach','incident'],
+  'eir-services':['internet','connectivity','broadband','fibre','bandwidth','site','line speed'],
+  'secure-access-edge':['vpn','zero trust','ztna','sase','branch','remote access','cloud app','shadow it'],
+  'eir-support':['support','helpdesk','sla','escalation','who do you call','fix it']
+};
+const PROBE_WORDS = ['how often','impact','cost','who','when','budget','risk','happen if','tested','managed','policy','plan','urgent','priority','how many','how long','what if'];
+
+/* =========================================================================
+   AI PROVIDER SETTINGS
+   ========================================================================= */
+const PROVIDER_DEFAULTS = {
+  anthropic:{ label:'Claude (Anthropic)', model:'claude-sonnet-5', keyHint:'Get a key at console.anthropic.com → API Keys.' },
+  openai:{ label:'ChatGPT (OpenAI)', model:'gpt-5-mini', keyHint:'Get a key at platform.openai.com → API Keys.' },
+  gemini:{ label:'Gemini (Google)', model:'gemini-flash-latest', keyHint:'Uses the server-side key configured in Netlify (Site configuration \u2192 Environment variables \u2192 GEMINI_API_KEY). Google\u2019s API can\u2019t be called directly from a browser (no CORS support), so this needs the included netlify/functions/gemini-proxy.js deployed alongside this page, with a Git-connected Netlify site so the function actually gets bundled. Falls back to Offline Practice Mode if the proxy isn\u2019t reachable. You can still override with your own key (or provider) via this panel \u2014 that always wins.' }
+};
+
+/* Sentinel value (not a real key) so the Scenario Coach works with zero setup
+   for anyone visiting the page: it tells netlify/functions/gemini-proxy.js to
+   use ITS OWN server-side GEMINI_API_KEY environment variable rather than a
+   key embedded in this client-side file. No secret lives in this file or in
+   version control — set the real key once in the Netlify dashboard instead.
+   Anyone can still override it with their own key (or provider) via the ⚙
+   Settings panel — that always wins over this default. */
+const EMBEDDED_GEMINI_KEY = 'USE_SERVER_KEY';
+
+const Settings = { provider:'gemini', apiKey:EMBEDDED_GEMINI_KEY, model:PROVIDER_DEFAULTS.gemini.model };
+
+function safeStorageGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function safeStorageSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){ /* ignore — in-memory only this session */ } }
+function safeStorageRemove(k){ try{ localStorage.removeItem(k); }catch(e){ /* ignore */ } }
+
+const RETIRED_MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash-lite', 'gpt-4o-mini', 'gpt-4o', 'gpt-4.1', 'gpt-4.1-mini', 'o4-mini'];
+function loadSettings(){
+  const p = safeStorageGet('qc_provider');
+  const k = safeStorageGet('qc_key_'+(p||'gemini'));
+  let m = safeStorageGet('qc_model_'+(p||'gemini'));
+  if(p && PROVIDER_DEFAULTS[p]) Settings.provider = p;
+  if(k) Settings.apiKey = k;
+  else if(Settings.provider !== 'gemini') Settings.apiKey = ''; // no saved key for a non-default provider — don't leak the embedded Gemini key into another provider's slot
+  if(m && RETIRED_MODELS.includes(m.trim())){
+    m = null; // fall through to the current default instead of a model we know is gone
+    safeStorageRemove('qc_model_'+Settings.provider);
+  }
+  Settings.model = m || PROVIDER_DEFAULTS[Settings.provider].model;
+}
+function persistSettings(){
+  safeStorageSet('qc_provider', Settings.provider);
+  if(Settings.apiKey) safeStorageSet('qc_key_'+Settings.provider, Settings.apiKey);
+  safeStorageSet('qc_model_'+Settings.provider, Settings.model);
+}
+loadSettings();
+
+/* =========================================================================
+   APP STATE
+   ========================================================================= */
+const App = { view:'home', qual:{ pieceId:null, nodeId:'start', notes:[] }, sessionLog:[] };
+const Coach = {
+  active:false, mode:null, profile:null, messages:[], turnScores:[], ended:false, busy:false,
+  usedHints:new Set(), hintNudgeTimer:null, inactivityEndTimer:null
+};
+let HINT_NUDGE_MS = 60*1000;        // surface a fresh, stage-aware hint after 1 minute with no new message
+let INACTIVITY_END_MS = 10*60*1000; // auto-score after 10 minutes with no new message
+
+/* =========================================================================
+   UTIL
+   ========================================================================= */
+function el(sel){return document.querySelector(sel);}
+function els(sel){return Array.from(document.querySelectorAll(sel));}
+function esc(str){return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function extractJSON(text){
+  let t = String(text).trim();
+  t = t.replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+  const start = t.indexOf('{');
+  const end = t.lastIndexOf('}');
+  if(start===-1||end===-1) throw new Error('No JSON object found in response');
+  return JSON.parse(t.slice(start, end+1));
+}
+
+/* ---- Unified multi-provider AI call ---- */
+async function callAI(system, messages, maxTokens){
+  if(!Settings.apiKey) throw new Error('No API key configured');
+  if(Settings.provider==='anthropic') return callAnthropic(system, messages, maxTokens||1000);
+  if(Settings.provider==='openai') return callOpenAI(system, messages, maxTokens||1000);
+  if(Settings.provider==='gemini') return callGemini(system, messages, maxTokens||1000);
+  throw new Error('Unknown provider');
+}
+
+async function callAnthropic(system, messages, maxTokens){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key": Settings.apiKey,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body: JSON.stringify({ model: Settings.model, max_tokens:maxTokens, system:system, messages:messages })
+  });
+  if(!response.ok){ const t = await response.text().catch(()=> ''); throw new Error('Anthropic API error '+response.status+': '+t.slice(0,200)); }
+  const data = await response.json();
+  const block = (data.content||[]).find(b=>b.type==='text');
+  if(!block) throw new Error('No text content in Anthropic response');
+  return block.text;
+}
+
+async function callOpenAI(system, messages, maxTokens){
+  const openaiMessages = [{role:'system', content:system}].concat(
+    messages.map(m=>({role: m.role==='assistant' ? 'assistant' : 'user', content:m.content}))
+  );
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+Settings.apiKey },
+    body: JSON.stringify({ model: Settings.model, messages: openaiMessages, max_tokens:maxTokens })
+  });
+  if(!response.ok){ const t = await response.text().catch(()=> ''); throw new Error('OpenAI API error '+response.status+': '+t.slice(0,200)); }
+  const data = await response.json();
+  const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if(!text) throw new Error('No text content in OpenAI response');
+  return text;
+}
+
+function parseGeminiResponse(data){
+  const cand = data.candidates && data.candidates[0];
+  const text = cand && cand.content && cand.content.parts && cand.content.parts.map(p=>p.text||'').join('');
+  if(!text) throw new Error('No text content in Gemini response');
+  return text;
+}
+async function callGemini(system, messages, maxTokens){
+  const contents = messages.map(m=>({ role: m.role==='assistant' ? 'model' : 'user', parts:[{text:m.content}] }));
+  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:maxTokens} };
+
+  // Google's Gemini API does not send CORS headers on generateContent, so it
+  // can't be called directly from a browser on any domain. The Netlify
+  // Function proxy (netlify/functions/gemini-proxy.js) makes the real call
+  // server-side, sidestepping CORS entirely. Try that first; only attempt a
+  // direct call as a last-ditch fallback (harmless, but expected to fail the
+  // same way unless Google changes their CORS policy).
+  try{
+    const proxyResp = await fetch("/.netlify/functions/gemini-proxy", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    });
+    if(proxyResp.ok){
+      return parseGeminiResponse(await proxyResp.json());
+    }
+    const t = await proxyResp.text().catch(()=> '');
+    let parsedErr = null;
+    try{ parsedErr = JSON.parse(t); }catch(e){ /* not JSON — almost certainly a hosting-level page (404/501/etc), not our function */ }
+    if(parsedErr){
+      // Looks like a genuine response from our function (either a relayed
+      // Gemini error, or our own {"error": "..."} shape) — surface it rather
+      // than masking it by falling through to a doomed direct-call attempt.
+      const msg = (parsedErr.error && parsedErr.error.message) || parsedErr.error || t;
+      throw new Error('Gemini API error '+proxyResp.status+': '+String(msg).slice(0,200));
+    }
+    // Non-JSON error body → no proxy deployed at this URL (e.g. running outside
+    // Netlify, or a dev server that doesn't support POST); fall through.
+  } catch(proxyErr){
+    if(proxyErr.message && proxyErr.message.startsWith('Gemini API error')) throw proxyErr;
+    // network-level failure reaching the proxy path — fall through to a direct attempt below.
+  }
+
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(Settings.model) + ":generateContent";
+  const response = await fetch(url, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-goog-api-key": Settings.apiKey },
+    body: JSON.stringify({ system_instruction:body.system_instruction, contents:body.contents, generationConfig:body.generationConfig })
+  });
+  if(!response.ok){ const t = await response.text().catch(()=> ''); throw new Error('Gemini API error '+response.status+': '+t.slice(0,200)); }
+  return parseGeminiResponse(await response.json());
+}
+
+/* =========================================================================
+   NAV
+   ========================================================================= */
+function setView(name){
+  App.view = name;
+  els('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.view===name));
+  el('#view-home').classList.toggle('hidden', name!=='home');
+  el('#view-training').classList.toggle('hidden', name!=='training');
+  el('#view-qual').classList.toggle('hidden', name!=='qual');
+  el('#view-coach').classList.toggle('hidden', name!=='coach');
+  if(name==='home') renderHome();
+  if(name==='training') renderTraining();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+els('.tab-btn').forEach(b=> b.addEventListener('click', ()=> setView(b.dataset.view)));
+el('#btn-goto-coach').addEventListener('click', ()=> setView('coach'));
+el('#btn-goto-training').addEventListener('click', ()=> setView('training'));
+el('#btn-qual-back').addEventListener('click', ()=> setView('home'));
+
+/* =========================================================================
+   SALES TRAINING CONTENT
+   ========================================================================= */
+const TRAINING_SECTIONS = [
+{
+  title:'Opening the Call',
+  sub:'The first 20 seconds decide whether you get a real conversation or a brush-off.',
+  html:`
+    <h4>Why the opening matters so much</h4>
+    <p>Most objections in the first minute aren't really about your product. They're a reflex against being interrupted by a stranger. Your only job in the opening is to earn ten more seconds of attention. Nothing else matters yet — not features, not pricing, not your company history.</p>
+    <h4>Do a little homework first</h4>
+    <p>Before you dial, spend two minutes looking at the business — their website, what they do, how many locations they seem to have. You don't need much. Even one relevant detail makes your opening sound like it's about them, not a script you're reading to everyone.</p>
+    <div class="train-quote"><span class="qlabel">Two-minute prep checklist</span>What do they do? How many sites, roughly? Who would I expect to be talking to? Is there anything obvious — busy season, multiple locations, public-facing business — that hints at a likely need?</div>
+    <h4>Lead with your name and company, not an apology</h4>
+    <p>Say your full name and your company name plainly, in your first sentence. This sounds simple, but it's the single biggest difference between a confident opener and a weak one. It gives the other person something concrete to respond to, instead of a vague voice asking for a favour.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"Hi Sarah, this is Alex Doyle calling from [Company] — have I caught you at an OK moment for two minutes, or is now genuinely bad?"</div>
+    <h4>Avoid the classic opener that quietly kills calls</h4>
+    <p>"Did I catch you at a bad time?" feels polite. But looking at real recorded cold calls, this exact phrase invites a reflexive "yes, actually, it is" far more often than it earns goodwill. If you use a permission-based opener at all, always pair it with a reason to stay on the line — don't just hand them an easy exit.</p>
+    <h4>Give them a reason to keep listening</h4>
+    <p>Your hook doesn't need to be clever. It needs to be relevant — tied to their sector, their size, or something plausible about their setup. A hook grounded in real specifics beats a generic value statement every single time.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"We work with a lot of businesses your size who've ended up with connectivity, phones and security spread across two or three different suppliers — I'm calling around to see if that's the situation for you too, and if there's a gap worth a ten-minute look."</div>
+    <h4>If they push back immediately</h4>
+    <p>A fast "not interested" this early is almost always a reflex, not a real answer. They haven't heard anything yet to be interested or uninterested in. Acknowledge it, don't argue, and ask for a little more room.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"Totally fair, and you don't know me yet. Can I ask one quick question before I let you go — [relevant question tied to your hook]?"</div>
+    <p>If they still say no, thank them genuinely and end the call cleanly. A respectful exit keeps the door open for another attempt later far better than pushing ever does.</p>
+    <h4>What a strong opening sounds like, start to finish</h4>
+    <div class="train-quote"><span class="qlabel">Full example</span>"Hi Sarah, this is Alex Doyle calling from [Company] — have I caught you at an OK time for two minutes? ... Great. We work with a lot of hotels your size, and one thing that comes up a lot is guest Wi-Fi and security getting stretched as bookings grow. Is that something that's ever caused you a headache, or has it been smooth sailing?"</div>
+    <div class="train-dodont">
+      <div class="train-do"><span class="dd-label">Do</span><ul>
+        <li>State your name and company immediately</li>
+        <li>Do two minutes of homework before you dial</li>
+        <li>Give one specific, relevant reason for the call</li>
+        <li>Ask a question that's easy to say yes to</li>
+      </ul></div>
+      <div class="train-dont"><span class="dd-label">Don't</span><ul>
+        <li>Open with "did I catch you at a bad time?"</li>
+        <li>Launch into a feature list before they've agreed to listen</li>
+        <li>Apologise for calling — it undercuts you before you've started</li>
+        <li>Read from a script word for word — it always sounds like it</li>
+      </ul></div>
+    </div>
+    <h4>Quick checklist before every call</h4>
+    <ul>
+      <li>I know the company name and roughly what they do</li>
+      <li>I have one specific, relevant hook ready — not a generic pitch</li>
+      <li>I know my own name and company will be the first thing I say</li>
+      <li>I have a plan for what to say if they immediately push back</li>
+    </ul>`
+},
+{
+  title:'Discovery Questions',
+  sub:'Situation, Problem, Implication, Need-payoff — the questioning sequence used throughout this site.',
+  html:`
+    <h4>Where this structure comes from</h4>
+    <p>The Situation, Problem, Implication, Need-payoff sequence follows the widely-taught questioning research popularised by Neil Rackham. It's used here as a plain, descriptive framework for internal training — not as any commercial SPIN Selling® certification or branded program. Once you've used it a few times, it starts to feel natural rather than like a formula.</p>
+    <h4>Situation questions: broad, low-pressure, and kept to a minimum</h4>
+    <p>These establish context — what they have today, how things are set up. They're necessary, but they're the least valuable part of the call, and over-asking them reads as an interrogation. Use just enough to orient yourself, then move on quickly.</p>
+    <div class="train-quote"><span class="qlabel">Example</span>"How are things set up today for [area] — what are you currently using?"</div>
+    <p><strong>Common junior mistake:</strong> staying in Situation questions for too long. If you've asked more than two or three "what do you currently have" questions, it's time to move to Problem — you're gathering facts, not yet finding anything useful.</p>
+    <h4>Problem questions: where real discovery starts</h4>
+    <p>These surface difficulties, dissatisfactions or concerns connected to the situation they just described. This is where you stop collecting facts and start listening for something that actually matters to them.</p>
+    <div class="train-quote"><span class="qlabel">Example</span>"How's that been working for you — anything that causes friction day to day?"</div>
+    <h4>Implication questions: the step most reps skip</h4>
+    <p>A stated problem isn't automatically a reason to buy. Implication questions push the prospect to work out the real cost of the problem themselves — in time, money, risk or hassle. This is what turns a mild complaint into something worth solving now, and it's the single most under-used question type in weak discovery calls.</p>
+    <div class="train-quote"><span class="qlabel">Example</span>"When that happens, what does it actually cost you — lost time, frustrated staff, missed business?"</div>
+    <p>Skipping straight from Problem to pitching is the most common discovery mistake there is. Without a clear implication, your solution is solving a problem the customer hasn't yet decided is worth fixing. If you only remember one thing from this whole section, make it this one.</p>
+    <h4>Need-payoff questions: let them say the value out loud</h4>
+    <p>Rather than you telling them why your solution matters, a good need-payoff question gets the prospect to state the value themselves — which makes it far stickier than anything you could say.</p>
+    <div class="train-quote"><span class="qlabel">Example</span>"If that stopped happening altogether, what would that be worth to the business?"</div>
+    <h4>Open questions versus closed questions</h4>
+    <p>An open question invites a real answer. A closed question invites "yes" or "no" — and tells you almost nothing. Both have a place, but if your call is mostly closed questions, you're not really doing discovery.</p>
+    <table class="train-table">
+      <tr><th>Closed (avoid as your main tool)</th><th>Open (use instead)</th></tr>
+      <tr><td>"Do you have backup in place?"</td><td>"How do you currently handle backup?"</td></tr>
+      <tr><td>"Is security a priority for you?"</td><td>"How do you think about security day to day?"</td></tr>
+      <tr><td>"Are you happy with your current provider?"</td><td>"How's that relationship working out for you?"</td></tr>
+    </table>
+    <h4>The power of a short pause</h4>
+    <p>After you ask a question, stop talking. Silence feels uncomfortable, but it's doing real work — it gives the other person space to think, and people often add a second, more honest answer after a short pause if you don't rush to fill it. Junior reps often jump in early because silence feels awkward. Let it sit for two or three seconds. It's worth it.</p>
+    <h4>Two habits that make all four question types work better</h4>
+    <ul>
+      <li><strong>Let them do most of the talking.</strong> A commonly cited rule of thumb is that the prospect should account for roughly 70% of the conversation. If you're talking more than that, you're pitching, not discovering.</li>
+      <li><strong>Don't accept the first, surface-level answer.</strong> "It's fine" or "no real issues" is rarely the whole picture — a good follow-up question ("fine in what sense?", "anything that's ever caused a problem?") often uncovers what a flat first answer was hiding.</li>
+    </ul>
+    <div class="train-dodont">
+      <div class="train-do"><span class="dd-label">Do</span><ul>
+        <li>Ask one question, then stop talking and listen</li>
+        <li>Follow a vague answer with a more specific one</li>
+        <li>Let Implication questions do the persuading, not your pitch</li>
+        <li>Leave a short pause after your question</li>
+      </ul></div>
+      <div class="train-dont"><span class="dd-label">Don't</span><ul>
+        <li>Stack three questions into one breath</li>
+        <li>Treat this as a checklist to tick rather than a conversation</li>
+        <li>Jump to positioning before Implication is actually established</li>
+        <li>Rush to fill every silence</li>
+      </ul></div>
+    </div>
+    <h4>Quick checklist for a discovery call</h4>
+    <ul>
+      <li>I asked no more than two or three Situation questions before moving on</li>
+      <li>I found at least one real Problem, not just a factual situation</li>
+      <li>I asked at least one Implication question — what does it cost them?</li>
+      <li>I let them state the value themselves with a Need-payoff question</li>
+      <li>I was talking less than a third of the time</li>
+    </ul>`
+},
+{
+  title:'Handling Objections',
+  sub:'Objections mean the prospect is still in the conversation — treat them as information, not rejection.',
+  html:`
+    <h4>First: objections are a good sign, not a bad one</h4>
+    <p>It's easy for a junior rep to hear an objection and feel like the call has gone wrong. In reality, a prospect who didn't care at all would just go quiet or hang up. An objection means they're still engaged enough to explain why they're hesitant — which gives you something real to work with.</p>
+    <h4>Most objections fall into one of three types</h4>
+    <table class="train-table">
+      <tr><th>Type</th><th>What it sounds like</th><th>What's really going on</th></tr>
+      <tr><td>Dismissive</td><td>"Not interested." "Send me an email." "Too busy."</td><td>A reflex against the interruption — they haven't actually evaluated anything yet.</td></tr>
+      <tr><td>Situational</td><td>"No budget." "Bad timing." "We're slammed right now."</td><td>The idea might be fine, but their current reality makes acting on it feel hard.</td></tr>
+      <tr><td>Existing solution</td><td>"We already use someone for that." "We've a contract in place."</td><td>They have a reason to believe the problem is already handled — which may or may not be true.</td></tr>
+    </table>
+    <h4>A simple framework that works across all three: LAER</h4>
+    <ul>
+      <li><strong>Listen</strong> — let them finish completely. Don't start formulating your reply while they're still talking.</li>
+      <li><strong>Acknowledge</strong> — show you actually heard it. "That makes sense" lands better than a scripted "I understand."</li>
+      <li><strong>Explore</strong> — ask a genuine, open question to find out what's really behind the objection.</li>
+      <li><strong>Respond</strong> — address the real concern you just uncovered, not just the first thing they said.</li>
+    </ul>
+    <h4>Feel, Felt, Found — a specific technique for the Acknowledge and Explore steps</h4>
+    <div class="train-quote"><span class="qlabel">Structure</span>"I understand how you feel — other customers felt the same way at first. What they found was..."</div>
+    <p>It validates the concern, offers social proof, and reframes — all in one short structure. Use it sparingly. It starts to sound scripted if every single objection gets the exact same three words.</p>
+    <h4>Worked examples</h4>
+    <div class="train-quote"><span class="qlabel">"We don't have the budget right now"</span>"That's fair — budget's usually already earmarked for things already on the roadmap. Can I ask, if this ended up saving [time/cost] each month, would it be worth revisiting when the next budget cycle opens?"</div>
+    <div class="train-quote"><span class="qlabel">"We already have a provider for that"</span>"Good to know — a lot of the businesses we now work with said the same thing at first. How's that relationship working for you at the moment — any frustrations, or is it solid across the board?"</div>
+    <div class="train-quote"><span class="qlabel">"Send me an email / I'm not interested"</span>"No problem, happy to. Before I do — genuinely one quick question so what I send is actually useful — [tie to your hook]?"</div>
+    <div class="train-quote"><span class="qlabel">"I'd need to check with my business partner / the board"</span>"Makes total sense, this isn't just your call to make alone. What would be useful for you to bring to that conversation — would a short summary help, or would it be worth them joining a quick call directly?"</div>
+    <div class="train-quote"><span class="qlabel">"We're just too busy right now"</span>"Completely understand — that's exactly when these things tend to get put off. Out of interest, is 'busy' likely to ease up in the next month or two, or is this just how things are for the foreseeable?"</div>
+    <h4>Two habits that separate strong objection handling from weak</h4>
+    <ul>
+      <li><strong>Do good discovery before you ever get to positioning.</strong> Most late-stage objections are prevented, not overcome — a prospect who's already articulated their own pain and its cost rarely objects hard at the end.</li>
+      <li><strong>Isolate the objection before you solve it.</strong> "If we could sort out [X], is there anything else that would stop you moving forward?" — this stops you solving one objection only to be hit by three more.</li>
+    </ul>
+    <h4>What to do if you genuinely don't have a good answer</h4>
+    <p>You won't always have a sharp response ready, and that's fine — especially early in your career. It's far better to be honest than to bluff. "That's a fair point, I want to give you a proper answer rather than guess — can I come back to you on that by [specific time]?" is a completely respectable thing to say, and prospects generally respect it more than a shaky improvised answer.</p>
+    <div class="train-dodont">
+      <div class="train-do"><span class="dd-label">Do</span><ul>
+        <li>Treat an objection as a request for more information</li>
+        <li>Ask a clarifying question before responding</li>
+        <li>Stay curious about what's really driving it</li>
+        <li>Admit it honestly if you don't know the answer yet</li>
+      </ul></div>
+      <div class="train-dont"><span class="dd-label">Don't</span><ul>
+        <li>Argue with the objection or get defensive</li>
+        <li>Reach for a canned rebuttal before you've listened</li>
+        <li>Solve the stated objection while ignoring the real one underneath</li>
+        <li>Bluff an answer you're not sure about</li>
+      </ul></div>
+    </div>
+    <h4>Quick checklist for handling an objection</h4>
+    <ul>
+      <li>I let them finish speaking before I responded</li>
+      <li>I acknowledged the objection before addressing it</li>
+      <li>I asked a question to find out what's really behind it</li>
+      <li>I checked if there was anything else stopping them, once this was resolved</li>
+    </ul>`
+},
+{
+  title:'Positioning the Solution',
+  sub:"Anchor the fix to the specific pain they described — not a general pitch about what you sell.",
+  html:`
+    <h4>Position what you discovered, not what you sell</h4>
+    <p>The strongest positioning statement repeats the prospect's own words back to them, then connects directly to the fix. Generic feature-led pitches are forgettable because they could be said to anyone. A positioning statement anchored to what THIS prospect just told you is memorable because it's specific to them.</p>
+    <div class="train-quote"><span class="qlabel">Weak</span>"We offer a fully managed backup and disaster recovery service with immutable cloud storage and rapid restore."</div>
+    <div class="train-quote"><span class="qlabel">Strong</span>"You mentioned you've never actually tested a full restore, and that a failed one could set you back a week — that's exactly the gap this closes: we'd test a full restore with you so you know, on record, that it works."</div>
+    <h4>One problem, one fix — resist the urge to pitch everything</h4>
+    <p>Once you know the full range of what's on offer, the temptation is to mention all of it "just in case." In practice, tying the conversation to the one or two things that actually came up in discovery lands far better than a broad tour of everything available. Park the rest for a follow-up conversation — there's nearly always a next call.</p>
+    <h4>Translate features into outcomes</h4>
+    <p>A feature is what something does. An outcome is why the customer actually cares. Junior reps often lead with features because that's what's easiest to remember from training — but outcomes are what actually land.</p>
+    <table class="train-table">
+      <tr><th>Feature</th><th>Outcome the customer actually cares about</th></tr>
+      <tr><td>24/7 monitoring</td><td>You find out about a problem before it costs you a day of trading, not after.</td></tr>
+      <tr><td>Immutable backup</td><td>Even if ransomware gets in, your data can't be encrypted along with it.</td></tr>
+      <tr><td>Single point of contact</td><td>One call, one number, no more chasing three different suppliers.</td></tr>
+      <tr><td>MDM enrolment</td><td>A lost phone can be wiped in minutes, not left as an open door.</td></tr>
+    </table>
+    <h4>If they ask about price early</h4>
+    <p>It's common for a prospect to ask "how much does this cost?" before you've finished discovery. You don't need to dodge the question, but answering it properly usually means understanding their situation first. A short, honest bridge works well.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"Good question, and I'll absolutely get you a number — it depends a bit on scale, so let me ask two more quick things first so what I give you is actually accurate rather than a guess."</div>
+    <h4>Use the Need-payoff answer as your bridge into next steps</h4>
+    <p>If they've already told you what the fix would be worth to them, close by referencing that value directly, then move straight into a concrete next step rather than leaving it open-ended.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"You said that would be worth a lot to you if it stopped happening — that's exactly what this fixes. The natural next step is a short call with one of our specialists to scope it properly — does later this week work?"</div>
+    <div class="train-dodont">
+      <div class="train-do"><span class="dd-label">Do</span><ul>
+        <li>Quote their own words back to them</li>
+        <li>Lead with the outcome, not the feature list</li>
+        <li>Bridge price questions with one or two more discovery questions</li>
+        <li>End with one clear, specific next step</li>
+      </ul></div>
+      <div class="train-dont"><span class="dd-label">Don't</span><ul>
+        <li>Pitch the entire portfolio in one go</li>
+        <li>Use jargon they haven't used themselves</li>
+        <li>Dodge a price question entirely — bridge it instead</li>
+        <li>Leave the call without a concrete next action</li>
+      </ul></div>
+    </div>
+    <h4>Quick checklist before you position anything</h4>
+    <ul>
+      <li>I can repeat back, in their words, what the problem actually is</li>
+      <li>I know what it costs them — I asked an Implication question already</li>
+      <li>I'm connecting one specific fix to one specific pain, not listing everything</li>
+      <li>I have a concrete next step ready to suggest</li>
+    </ul>`
+},
+{
+  title:'BANT Qualification',
+  sub:'Budget, Authority, Need, Timeline — a fast way to tell a real opportunity from a polite conversation.',
+  html:`
+    <h4>What BANT is for</h4>
+    <p>BANT was originally developed at IBM to help reps quickly sort viable deals from tyre-kickers. It's best treated as a first-pass filter for shorter, SME-scale sales cycles — not a rigid checklist, and not a substitute for genuine discovery. The best BANT practitioners rarely say the literal words "budget, authority, need or timeline" out loud on a call.</p>
+    <div class="bant-grid">
+      <div class="bant-card"><span class="bant-letter">B</span><h5>Budget</h5><p>Not just "do they have money" — whether funds are allocated, accessible and realistic for this kind of purchase.</p><div class="bant-ask">"How do you typically fund something like this — is it a set budget, or something you'd build a case for?"</div></div>
+      <div class="bant-card"><span class="bant-letter">A</span><h5>Authority</h5><p>Who can approve it, who influences it, and who controls the purse strings — often three different people.</p><div class="bant-ask">"Who else would need to be comfortable with this for it to move forward?"</div></div>
+      <div class="bant-card"><span class="bant-letter">N</span><h5>Need</h5><p>A real, specific, costed problem — not a vague "sure, that'd be handy." This is where your discovery work does the heavy lifting.</p><div class="bant-ask">"Walk me through what happens today when [the problem] comes up."</div></div>
+      <div class="bant-card"><span class="bant-letter">T</span><h5>Timeline</h5><p>What's actually driving the timing — a renewal, a growth plan, an incident — versus no real urgency at all.</p><div class="bant-ask">"What's driving the timing on this — is there something specific pushing it, or is it more exploratory for now?"</div></div>
+    </div>
+    <h4>Lead with Need, not Budget</h4>
+    <p>Asking about budget or authority before establishing a real need feels transactional and puts prospects on the defensive. Discovering the problem first, and letting budget and authority come up naturally once the pain is established, keeps the conversation consultative rather than turning it into an interrogation.</p>
+    <h4>Score it, don't just tick it</h4>
+    <p>Rate each of the four dimensions 0 to 3 based on actual evidence from the conversation — a specific number, a named stakeholder, a stated event — rather than a gut feeling. A vague "budget isn't an issue" is weak evidence. "We've got €15k earmarked for this and our ops director signs off anything under €20k" is strong evidence.</p>
+    <h4>A short worked example</h4>
+    <p>Notice how none of these questions sound like a checklist — they follow naturally from what the customer just said.</p>
+    <div class="train-quote"><span class="qlabel">Need</span>Rep: "How's that been working for you?" Customer: "Honestly, it's a pain — we lose a day every few months when it goes down."</div>
+    <div class="train-quote"><span class="qlabel">Timeline</span>Rep: "Has that happened recently, or is it more of an ongoing thing?" Customer: "Twice this quarter already."</div>
+    <div class="train-quote"><span class="qlabel">Authority</span>Rep: "If we looked at fixing this, would that be your call, or is there someone else who'd need to weigh in?" Customer: "I'd bring it to our ops director, but I'd be the one pushing it."</div>
+    <div class="train-quote"><span class="qlabel">Budget</span>Rep: "Roughly, is this the kind of thing that would come out of an existing budget, or would it need a new case built?" Customer: "We'd probably need to build a case, but if the numbers make sense it's not a hard sell internally."</div>
+    <h4>Common BANT mistakes</h4>
+    <ul>
+      <li><strong>Treating it as a rigid checklist.</strong> Reciting four questions in sequence sounds like an interrogation — weave them into the natural flow instead.</li>
+      <li><strong>Disqualifying too early on budget.</strong> "No budget" often means "not currently allocated," not "could never be found" — explore the value before writing it off.</li>
+      <li><strong>Assuming one decision-maker.</strong> Especially past the smallest businesses, there's often an influencer and a budget-holder in addition to whoever you're speaking to.</li>
+      <li><strong>Accepting a shallow Need statement.</strong> "Yeah, that'd be useful" isn't a qualified need — push through to Implication before treating it as one.</li>
+    </ul>
+    <h4>How this connects to the rest of the site</h4>
+    <p>The Test Your Knowledge quiz and the Virtual Sales Call are both really BANT and structured discovery in practice: Situation and Problem questions build toward Need, Implication questions build the case that makes Budget conversations easier, and Need-payoff naturally surfaces Timeline and Authority. Qualification level (None → Surface → Emerging → Qualified) used throughout this site is effectively a live BANT-and-Need scorecard for each area.</p>
+    <h4>Quick checklist for qualifying an opportunity</h4>
+    <ul>
+      <li>I know what the specific need is, not just a general area of interest</li>
+      <li>I have a sense of who else needs to agree before this moves forward</li>
+      <li>I know roughly how this kind of spend gets approved</li>
+      <li>I know what's driving the timing, if anything</li>
+    </ul>`
+},
+{
+  title:'Closing the Call & Next Steps',
+  sub:'A good call with no clear next step is a wasted call — always end with something concrete.',
+  html:`
+    <h4>Why this step gets skipped, and why it matters</h4>
+    <p>It's easy for a junior rep to have a genuinely good conversation, feel satisfied that it went well, and then hang up without anything actually agreed. A good discovery call that ends with "I'll follow up" and nothing more specific rarely turns into a real next step — it just quietly goes cold. Ending with something concrete is what actually moves things forward.</p>
+    <h4>Summarise before you close</h4>
+    <p>Briefly play back what you heard. This does two things: it proves you were actually listening, and it gives the customer a chance to correct anything before you both move forward on the wrong assumption.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"Just to make sure I've got this right — the main thing is [X], and it's costing you [Y] when it happens. Does that sound right, or is there anything I've missed?"</div>
+    <h4>Always propose a specific next step — never leave it open</h4>
+    <p>"I'll be in touch" is not a next step. A next step has a date, a format, and ideally a name attached to it.</p>
+    <table class="train-table">
+      <tr><th>Weak close</th><th>Strong close</th></tr>
+      <tr><td>"I'll follow up with some info."</td><td>"I'll send that over today, and I'll call you Thursday at 10 to go through it together."</td></tr>
+      <tr><td>"Let me know if you're interested."</td><td>"Does it make sense to get a specialist on a short call next week to scope this properly?"</td></tr>
+      <tr><td>"I'll check and get back to you."</td><td>"I'll have an answer for you by end of day tomorrow — I'll call you directly rather than just emailing."</td></tr>
+    </table>
+    <h4>Handling "let me think about it"</h4>
+    <p>This is one of the most common soft objections at the end of a call. It's rarely a flat no — but it needs a specific, low-pressure follow-up, not just a hopeful "sounds good, talk soon."</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"Of course, that's completely fair. What would be useful to think through — is it the cost, the timing, or something else? And when's a good time for me to check back in, so I'm not chasing you before you're ready?"</div>
+    <h4>Confirm, don't assume</h4>
+    <p>Before you hang up, restate the agreed next step out loud, in plain terms, so there's no ambiguity on either side about what happens next and when.</p>
+    <div class="train-quote"><span class="qlabel">Say this</span>"Great, so just to confirm — I'll send over [X] today, and we'll speak again on [day] at [time]. Sound good?"</div>
+    <h4>Log it straight away</h4>
+    <p>Write down what was agreed the moment the call ends, while it's fresh — the specific next step, the date, and anything important you learned. A great call that isn't followed up on schedule loses almost all of its value.</p>
+    <div class="train-dodont">
+      <div class="train-do"><span class="dd-label">Do</span><ul>
+        <li>Summarise what you heard before closing</li>
+        <li>Propose a next step with a specific date and format</li>
+        <li>Confirm the agreed next step out loud before hanging up</li>
+        <li>Log it immediately afterwards</li>
+      </ul></div>
+      <div class="train-dont"><span class="dd-label">Don't</span><ul>
+        <li>End on "I'll follow up" with nothing more specific</li>
+        <li>Assume they'll remember details without you sending them</li>
+        <li>Let "let me think about it" go without a specific check-in date</li>
+        <li>Wait until later to write up what happened</li>
+      </ul></div>
+    </div>
+    <h4>Quick checklist before you hang up</h4>
+    <ul>
+      <li>I summarised what I heard and confirmed it was accurate</li>
+      <li>I proposed a specific next step, not a vague "I'll be in touch"</li>
+      <li>We agreed a date and format for what happens next</li>
+      <li>I know exactly what I'm doing straight after this call ends</li>
+    </ul>`
+}
+];
+
+function renderTraining(){
+  const wrap = el('#training-body');
+  if(wrap.dataset.built) return; // build once, accordion state persists via CSS classes afterward
+  wrap.dataset.built = '1';
+  wrap.innerHTML = TRAINING_SECTIONS.map((s,i)=>`
+    <div class="train-card ${i===0?'open':''}" data-idx="${i}">
+      <div class="train-head">
+        <div class="train-num">${i+1}</div>
+        <div style="flex:1;">
+          <h3>${esc(s.title)}</h3>
+          <div class="train-sub">${esc(s.sub)}</div>
+        </div>
+        <div class="train-chevron">▶</div>
+      </div>
+      <div class="train-body"><div class="train-body-inner">${s.html}</div></div>
+    </div>`).join('');
+  els('.train-head').forEach(h=> h.addEventListener('click', ()=>{
+    h.closest('.train-card').classList.toggle('open');
+  }));
+}
+
+/* =========================================================================
+   HOME / OVERVIEW RENDERING
+   ========================================================================= */
+function bestLevelForPiece(pieceId){
+  const rows = App.sessionLog.filter(r=>r.pieceId===pieceId);
+  if(rows.length===0) return null;
+  return rows.reduce((best,r)=> LEVEL_SCORE[r.level] > LEVEL_SCORE[best.level] ? r : best);
+}
+function renderHome(){
+  const grid = el('#piece-grid');
+  grid.innerHTML = PIECES.map(p=>{
+    const best = bestLevelForPiece(p.id);
+    const badge = best ? `<span class="pc-status" style="background:${LEVELS[best.level].bg};color:${LEVELS[best.level].color};">${LEVELS[best.level].label}</span>` : '';
+    return `<button class="piece-card" style="--accent:${p.color}" data-id="${p.id}">
+      <div class="pc-icon">${p.icon}</div>
+      <h3>${esc(p.name)}</h3>
+      <p>${esc(p.blurb)}</p>
+      ${badge}
+    </button>`;
+  }).join('');
+  els('.piece-card').forEach(c=> c.addEventListener('click', ()=> startPiece(c.dataset.id)));
+
+  const logBody = el('#session-log-body');
+  if(App.sessionLog.length===0){
+    logBody.innerHTML = '<p class="log-empty">No areas assessed yet — pick a puzzle piece above to begin.</p>';
+  } else {
+    const list = PIECE_IDS.map(id=>{
+      const best = bestLevelForPiece(id);
+      if(!best) return null;
+      const piece = PIECE_BY_ID[id];
+      const lv = LEVELS[best.level];
+      return `<span class="log-chip" style="background:${lv.bg};color:${lv.color};border-color:${lv.color}33;">
+        <span class="log-dot" style="background:${lv.color}"></span>${piece.icon} ${esc(piece.short)} · ${lv.label}
+      </span>`;
+    }).filter(Boolean).join('');
+    logBody.innerHTML = `<div class="log-list">${list}</div>`;
+  }
+}
+
+/* =========================================================================
+   GUIDED QUALIFICATION
+   ========================================================================= */
+const STEP_DEFS = [
+  {key:'situation', label:'Situation'},
+  {key:'problem', label:'Problem'},
+  {key:'implication', label:'Implication'},
+  {key:'needpayoff', label:'Need-payoff'},
+  {key:'result', label:'Close'}
+];
+function startPiece(pieceId){
+  App.qual.pieceId = pieceId;
+  App.qual.nodeId = 'start';
+  App.qual.notes = [];
+  setView('qual');
+  renderQualHeader();
+  renderQualNode();
+}
+function renderQualHeader(){
+  const piece = PIECE_BY_ID[App.qual.pieceId];
+  const iconEl = el('#qh-icon');
+  iconEl.textContent = piece.icon;
+  iconEl.style.background = piece.color;
+  el('#qh-title').textContent = piece.name;
+  el('#qh-sub').textContent = piece.blurb;
+  const critPanel = el('#crit-panel');
+  critPanel.innerHTML = '<strong>A qualified opportunity here usually looks like:</strong><ul>' + piece.criteria.map(c=>`<li>${esc(c)}</li>`).join('') + '</ul>';
+  critPanel.classList.remove('show');
+  el('#btn-crit-toggle').textContent = 'Show qualification criteria for this area ▾';
+}
+el('#btn-crit-toggle').addEventListener('click', ()=>{
+  const panel = el('#crit-panel');
+  const showing = panel.classList.toggle('show');
+  el('#btn-crit-toggle').textContent = (showing?'Hide':'Show') + ' qualification criteria for this area ' + (showing?'▴':'▾');
+});
+function currentStepIndex(node){
+  const t = node.type==='choice' ? node.stage : node.type;
+  if(t==='situation') return 0;
+  if(t==='problem') return 1;
+  if(t==='implication') return 2;
+  if(t==='needpayoff') return 3;
+  return 4;
+}
+function renderStepper(activeIdx){
+  el('#qh-stepper').innerHTML = STEP_DEFS.map((s,i)=>{
+    const cls = i<activeIdx ? 'done' : (i===activeIdx ? 'current' : '');
+    return `<div class="step ${cls}"><div class="sdot">${i<activeIdx?'✓':(i+1)}</div><div class="slabel">${s.label}</div><div class="sline"></div></div>`;
+  }).join('');
+}
+function renderQualNode(){
+  const piece = PIECE_BY_ID[App.qual.pieceId];
+  const node = piece.tree[App.qual.nodeId];
+  const body = el('#qual-body');
+
+  if(node.result){
+    renderStepper(4);
+    const lv = LEVELS[node.level];
+    const notesHtml = App.qual.notes.length ? `
+        <h4>Additional context you gathered</h4>
+        <ul>${App.qual.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>` : '';
+    body.innerHTML = `
+      <div class="result-card" style="background:${lv.bg};border-color:${lv.color}44;">
+        <span class="result-badge" style="background:${lv.color};color:#fff;">${lv.label}</span>
+        <h3>${esc(node.title)}</h3>
+        ${node.transition ? `<div class="transition-note" style="color:${lv.color};">${esc(node.transition)}</div>` : ''}
+        <p class="body-text">${esc(node.body)}</p>
+        <h4>Talking points</h4>
+        <ul>${node.points.map(p=>`<li>${esc(p)}</li>`).join('')}</ul>
+        ${notesHtml}
+        <div class="nextstep-box">➜ ${esc(node.next)}</div>
+        ${node.closeGuidance ? `<div class="needpayoff-box"><span class="np-label">How to close from here</span>${esc(node.closeGuidance)}</div>` : ''}
+        ${node.cta ? `<a class="btn btn-primary" href="${esc(node.cta.href)}" style="margin-top:14px;">${esc(node.cta.label)}</a>` : ''}
+        <div class="result-actions">
+          <button class="btn btn-primary" id="btn-retry-piece">Try Different Answers</button>
+          <button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>
+          <button class="btn btn-ghost" id="btn-done-piece">Back to All Pieces</button>
+        </div>
+      </div>`;
+    logResult(App.qual.pieceId, node.level);
+    el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; renderQualNode(); });
+    el('#btn-next-piece').addEventListener('click', ()=>{
+      const idx = PIECE_IDS.indexOf(App.qual.pieceId);
+      startPiece(PIECE_IDS[(idx+1) % PIECE_IDS.length]);
+    });
+    el('#btn-done-piece').addEventListener('click', ()=> setView('home'));
+  } else {
+    const stepIdx = currentStepIndex(node);
+    renderStepper(stepIdx);
+    const badgeClass = node.type==='choice' ? node.stage : node.type;
+    const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
+    const badgeLabel = node.type==='choice' ? 'Your Call' : (badgeLabels[node.type] || '');
+    body.innerHTML = `
+      <div class="qcard">
+        <div class="qtype-row"><span class="qtype-badge ${badgeClass}">${badgeLabel}</span></div>
+        <h3>${esc(node.q)}</h3>
+        <div class="opt-list">
+          ${node.options.map((o,i)=>`<button class="opt-btn" data-next="${o.next}" data-optidx="${i}"><span>${esc(o.label)}</span><span class="arrow">→</span></button>`).join('')}
+        </div>
+      </div>`;
+    els('.opt-btn').forEach(b=> b.addEventListener('click', ()=>{
+      const optIdx = Number(b.dataset.optidx);
+      const chosen = node.options[optIdx];
+      if(chosen.note) App.qual.notes.push(chosen.note);
+      App.qual.nodeId = b.dataset.next;
+      renderQualNode();
+    }));
+  }
+}
+function logResult(pieceId, level){ App.sessionLog.push({pieceId, level, ts:Date.now()}); }
+
+/* =========================================================================
+   SETTINGS MODAL
+   ========================================================================= */
+function openSettings(){
+  els('.provider-opt').forEach(b=> b.classList.toggle('active', b.dataset.provider===Settings.provider));
+  el('#settings-key').value = Settings.apiKey || '';
+  el('#settings-model').value = Settings.model || PROVIDER_DEFAULTS[Settings.provider].model;
+  el('#settings-key-hint').textContent = PROVIDER_DEFAULTS[Settings.provider].keyHint;
+  el('#settings-status').classList.remove('show');
+  el('#settings-backdrop').classList.add('show');
+}
+function closeSettings(){ el('#settings-backdrop').classList.remove('show'); }
+el('#btn-open-settings').addEventListener('click', openSettings);
+el('#btn-open-settings-2').addEventListener('click', openSettings);
+el('#btn-settings-close').addEventListener('click', closeSettings);
+el('#settings-backdrop').addEventListener('click', (e)=>{ if(e.target.id==='settings-backdrop') closeSettings(); });
+
+els('.provider-opt').forEach(b=> b.addEventListener('click', ()=>{
+  els('.provider-opt').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  const provider = b.dataset.provider;
+  const savedKey = safeStorageGet('qc_key_'+provider) || '';
+  const savedModel = safeStorageGet('qc_model_'+provider) || PROVIDER_DEFAULTS[provider].model;
+  el('#settings-key').value = savedKey;
+  el('#settings-model').value = savedModel;
+  el('#settings-key-hint').textContent = PROVIDER_DEFAULTS[provider].keyHint;
+  el('#settings-status').classList.remove('show');
+}));
+
+function selectedProvider(){
+  const active = el('.provider-opt.active');
+  return active ? active.dataset.provider : Settings.provider;
+}
+function showSettingsStatus(msg, ok){
+  const box = el('#settings-status');
+  box.textContent = msg;
+  box.className = 'settings-status show ' + (ok?'ok':'err');
+}
+
+el('#btn-settings-save').addEventListener('click', ()=>{
+  Settings.provider = selectedProvider();
+  Settings.apiKey = el('#settings-key').value.trim();
+  Settings.model = el('#settings-model').value.trim() || PROVIDER_DEFAULTS[Settings.provider].model;
+  persistSettings();
+  updateHeaderModePill();
+  showSettingsStatus('Saved. This provider will be used the next time you generate a scenario.', true);
+});
+
+el('#btn-settings-clear').addEventListener('click', ()=>{
+  const provider = selectedProvider();
+  safeStorageRemove('qc_key_'+provider);
+  if(Settings.provider===provider) Settings.apiKey = '';
+  el('#settings-key').value = '';
+  updateHeaderModePill();
+  showSettingsStatus('Key cleared for '+PROVIDER_DEFAULTS[provider].label+'.', true);
+});
+
+el('#btn-settings-test').addEventListener('click', async ()=>{
+  const provider = selectedProvider();
+  const key = el('#settings-key').value.trim();
+  const model = el('#settings-model').value.trim() || PROVIDER_DEFAULTS[provider].model;
+  if(!key){ showSettingsStatus('Enter an API key first.', false); return; }
+  const prevProvider = Settings.provider, prevKey = Settings.apiKey, prevModel = Settings.model;
+  Settings.provider = provider; Settings.apiKey = key; Settings.model = model;
+  showSettingsStatus('Testing…', true);
+  try{
+    const reply = await callAI('Reply with exactly the single word: OK', [{role:'user', content:'ping'}], 20);
+    showSettingsStatus('Connected — ' + PROVIDER_DEFAULTS[provider].label + ' responded successfully.', true);
+  } catch(err){
+    showSettingsStatus('Connection failed: ' + err.message, false);
+    Settings.provider = prevProvider; Settings.apiKey = prevKey; Settings.model = prevModel;
+  }
+});
+
+function updateHeaderModePill(){
+  const pill = el('#header-mode-pill');
+  if(Settings.apiKey){
+    pill.textContent = PROVIDER_DEFAULTS[Settings.provider].label + ' configured';
+  } else {
+    pill.textContent = 'Offline Practice Mode';
+  }
+}
+updateHeaderModePill();
+
+/* =========================================================================
+   SCENARIO COACH
+   ========================================================================= */
+function pieceCriteriaBlock(){
+  return PIECES.map(p=>`- ${p.name} (id: ${p.id}): ${p.criteria.join('; ')}`).join('\n');
+}
+const NEWS_HOOKS = [
+  "Ransomware and phishing attacks on small businesses have been widely reported recently — worth raising as a natural opener.",
+  "More insurers and larger customers are now asking SMEs to show evidence of basic security practices before signing contracts — a useful angle to mention.",
+  "The move away from traditional phone lines has been in the news a lot — a natural reason to ask how a business is planning around it.",
+  "Remote and hybrid working has made device and access management a bigger talking point for SMEs generally — worth raising early."
+];
+function genericHints(profile){
+  const p = profile || (Coach && Coach.profile);
+  const painPieces = (p && p.hiddenPains) ? p.hiddenPains.map(hp=>PIECE_BY_ID[hp.piece]).filter(Boolean) : [];
+  const hints = [];
+  hints.push({type:'news', text: NEWS_HOOKS[Math.floor(Math.random()*NEWS_HOOKS.length)]});
+  painPieces.slice(0,2).forEach(piece=>{
+    hints.push({type:'question', text:`Try asking a broad opening question about ${piece.name.toLowerCase()} — ${piece.criteria[0].toLowerCase()}.`});
+  });
+  while(hints.filter(h=>h.type==='question').length < 2){
+    hints.push({type:'question', text:'Try a broad opening question about one of the focus areas you haven\u2019t touched on yet.'});
+  }
+  hints.push({type:'nudge', text:'Ask what it actually costs them when the problem happens — time, money or hassle — not just whether it happens.'});
+  hints.push({type:'nudge', text:'If they give a short answer, follow up rather than moving straight to the next topic — the real detail is often one question further in.'});
+  return hints.slice(0,5);
+}
+function setModeBadge(mode){
+  const badge = el('#mode-badge');
+  if(mode==='ai'){
+    badge.innerHTML = '<span class="mode-dot" style="background:#01C088;"></span> ' + PROVIDER_DEFAULTS[Settings.provider].label + ' Live';
+    badge.style.background = '#DFF7EC'; badge.style.color = '#00996C';
+  } else {
+    badge.innerHTML = '<span class="mode-dot" style="background:#B9791F;"></span> Offline Practice Mode';
+    badge.style.background = '#FBF0DD'; badge.style.color = '#B9791F';
+  }
+}
+
+function pickDifficulty(){
+  const r = Math.random();
+  if(r < 0.70) return 'warm';       // most calls: friendly, forthcoming — good for building confidence
+  if(r < 0.90) return 'brisk';      // some calls: businesslike, a bit short, has to be earned
+  return 'dismissive';              // occasional: genuinely tough opener, skeptical, has to be worked for
+}
+function pickFallbackProfile(difficulty){
+  const matching = FALLBACK_PROFILES.filter(p => (p.difficulty||'warm') === difficulty);
+  const pool = matching.length ? matching : FALLBACK_PROFILES;
+  const profile = JSON.parse(JSON.stringify(pool[Math.floor(Math.random()*pool.length)]));
+  if(!Array.isArray(profile.hints) || !profile.hints.length) profile.hints = genericHints(profile);
+  return profile;
+}
+async function newScenario(){
+  el('#btn-new-scenario').disabled = true;
+  el('#btn-new-scenario').textContent = 'Generating…';
+  Coach.active = true; Coach.messages = []; Coach.turnScores = []; Coach.ended = false; Coach.usedHints = new Set();
+  clearTimeout(Coach.hintNudgeTimer); clearTimeout(Coach.inactivityEndTimer);
+  stopListening();
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
+
+  const difficulty = pickDifficulty();
+  let profile = null, mode = 'ai';
+  if(!Settings.apiKey){
+    mode = 'offline';
+    profile = pickFallbackProfile(difficulty);
+  } else {
+    try{ profile = await generateProfileViaAPI(difficulty); }
+    catch(err){ mode='offline'; profile = pickFallbackProfile(difficulty); }
+  }
+  Coach.profile = profile; Coach.mode = mode;
+  setModeBadge(mode);
+
+  el('#coach-idle').classList.add('hidden');
+  el('#coach-active').classList.remove('hidden');
+  el('#btn-new-scenario').disabled = false;
+  el('#btn-new-scenario').textContent = 'Generate New Scenario →';
+
+  renderProfileCard();
+  renderAreaRows();
+  el('#chat-scroll').innerHTML = '<div class="chat-empty" id="chat-empty">Open with a broad Situation question about one of the focus areas.</div>';
+  addBubble('customer', profile.openingLine, profile.persona.name);
+  if(mode==='offline' && !Settings.apiKey){
+    addBubble('system', 'No AI provider configured — running in Offline Practice Mode. Add a key in Settings for a live AI customer.');
+  }
+
+  el('#chat-input').disabled = false;
+  el('#btn-send').disabled = false;
+  el('#btn-hint').disabled = false;
+  el('#chat-input').focus();
+  resetInactivityTimers();
+}
+el('#btn-new-scenario').addEventListener('click', newScenario);
+
+function refreshScenario(){
+  const inProgress = Coach.active && !Coach.ended && Coach.messages.some(m=>m.who==='rep');
+  if(inProgress && !confirm('Start a new scenario? This will discard the current conversation and its score.')){
+    return;
+  }
+  newScenario();
+}
+el('#btn-refresh-scenario').addEventListener('click', refreshScenario);
+el('#btn-refresh-scenario-2').addEventListener('click', refreshScenario);
+el('#btn-modal-new').addEventListener('click', ()=>{ closeModal(); newScenario(); });
+
+function initials(name){ return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function sizeBand(employees){
+  const n = Number(employees) || 0;
+  if(n < 25) return 'Small team';
+  if(n < 75) return 'Mid-sized team';
+  if(n < 150) return 'Larger team';
+  return 'Large SME';
+}
+function renderProfileCard(){
+  const p = Coach.profile;
+  el('#pf-avatar').textContent = initials(p.persona.name);
+  el('#pf-name').textContent = p.persona.name;
+  el('#pf-company').textContent = p.companyName || '';
+  el('#pf-role').textContent = p.persona.role;
+  el('#pf-industry').textContent = p.industry;
+  el('#pf-size').textContent = sizeBand(p.employees);
+  el('#pf-desc').textContent = p.description;
+}
+function renderAreaRows(){
+  const wrap = el('#area-rows');
+  wrap.innerHTML = PIECES.map(p=>`<div class="area-row" data-piece="${p.id}">
+      <span class="area-dot" id="dot-${p.id}"></span>
+      <span class="area-name">${p.icon} ${esc(p.short)}</span>
+      <span class="area-lvl" id="lvl-${p.id}">—</span>
+    </div>`).join('');
+  updateGauge();
+}
+function bestTurnLevelForPiece(pieceId){
+  const rows = Coach.turnScores.filter(r=>r.piece===pieceId);
+  if(rows.length===0) return null;
+  return rows.reduce((best,r)=> LEVEL_SCORE[r.qualification] > LEVEL_SCORE[best.qualification] ? r : best);
+}
+function updateGauge(){
+  let score = 0, touchedCount = 0;
+  PIECES.forEach(p=>{
+    const best = bestTurnLevelForPiece(p.id);
+    const dot = el('#dot-'+p.id), lvlEl = el('#lvl-'+p.id);
+    if(best && LEVELS[best.qualification]){
+      const lv = LEVELS[best.qualification];
+      dot.style.background = lv.color; lvlEl.textContent = lv.short; lvlEl.style.color = lv.color;
+      score += LEVEL_SCORE[best.qualification];
+      touchedCount += 1;
+    } else {
+      dot.style.background = '#C7CBD6'; lvlEl.textContent = '—'; lvlEl.style.color = 'var(--ink-faint)';
+    }
+  });
+  const pct = Math.round((score / (PIECES.length*3)) * 100);
+  el('#gauge-num').textContent = pct;
+  let lvlLabel = 'Discovery Stage';
+  if(pct>=65) lvlLabel = 'Hot Opportunity';
+  else if(pct>=40) lvlLabel = 'Qualified Opportunity';
+  else if(pct>=18) lvlLabel = 'Developing Opportunity';
+  el('#gauge-lvl').textContent = lvlLabel;
+
+  const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
+  el('#live-counter').textContent = `${questionCount} question${questionCount===1?'':'s'} asked · ${touchedCount}/${PIECES.length} areas touched`;
+
+  const last = Coach.turnScores[Coach.turnScores.length-1];
+  const lf = el('#last-feedback');
+  if(last){
+    const typeLabels = {situation:'Situation', problem:'Problem', implication:'Implication', needpayoff:'Need-payoff', closed:'Closed question', other:'Other'};
+    lf.innerHTML = `<div class="lf-top"><span class="lf-type">${esc(typeLabels[last.questionType]||'Question')}</span><span class="lf-relevance">Relevance ${last.relevance}/3</span></div><div class="lf-note">${esc(last.note||'')}</div>`;
+    lf.classList.remove('hidden');
+  } else {
+    lf.classList.add('hidden');
+  }
+}
+function addBubble(who, text, name){
+  const empty = el('#chat-empty'); if(empty) empty.remove();
+  const scroll = el('#chat-scroll');
+  const div = document.createElement('div');
+  if(who==='system'){ div.className = 'bubble system'; div.textContent = text; }
+  else { div.className = 'bubble ' + who; div.innerHTML = (name ? `<span class="bubble-name">${esc(name)}</span>` : '') + esc(text); }
+  scroll.appendChild(div); scroll.scrollTop = scroll.scrollHeight;
+  if(who==='customer') speakText(text);
+}
+
+/* ---------- Voice input (speech-to-text) and voice output (text-to-speech) ----------
+   Uses the browser's built-in Web Speech API. In Chrome this is genuinely backed by
+   Google's speech services (recognition runs through Google's servers; the "Google
+   UK English Female" style voices in speechSynthesis.getVoices() are Google's own
+   TTS voices) — no separate API key or server proxy needed. Firefox/Safari have much
+   weaker or no support, so everything here is feature-detected and hidden if unavailable. */
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+const Voice = { recognizing:false, recognizer:null, enabled:false, googleVoice:null };
+
+function pickGoogleVoice(){
+  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  Voice.googleVoice = voices.find(v => /google/i.test(v.name) && /en/i.test(v.lang))
+    || voices.find(v => /google/i.test(v.name))
+    || voices.find(v => /en/i.test(v.lang))
+    || voices[0] || null;
+}
+function speakText(text){
+  if(!Voice.enabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel(); // don't let replies queue up and overlap
+  const utter = new SpeechSynthesisUtterance(text);
+  if(Voice.googleVoice) utter.voice = Voice.googleVoice;
+  utter.rate = 1.0;
+  window.speechSynthesis.speak(utter);
+}
+function initVoiceFeatures(){
+  if(window.speechSynthesis){
+    pickGoogleVoice();
+    window.speechSynthesis.onvoiceschanged = pickGoogleVoice;
+    el('#voice-toggle-wrap').style.display = 'flex';
+    const saved = safeStorageGet('ssa_voice_replies');
+    Voice.enabled = saved === '1';
+    el('#voice-toggle').checked = Voice.enabled;
+    el('#voice-toggle').addEventListener('change', (e)=>{
+      Voice.enabled = e.target.checked;
+      safeStorageSet('ssa_voice_replies', Voice.enabled ? '1' : '0');
+      if(!Voice.enabled && window.speechSynthesis) window.speechSynthesis.cancel();
+    });
+  }
+  if(SpeechRecognitionCtor){
+    el('#btn-mic').style.display = 'inline-flex';
+    Voice.recognizer = new SpeechRecognitionCtor();
+    Voice.recognizer.lang = 'en-IE';
+    Voice.recognizer.interimResults = false;
+    Voice.recognizer.maxAlternatives = 1;
+    Voice.recognizer.onresult = (e)=>{
+      const transcript = e.results[e.results.length-1][0].transcript;
+      const input = el('#chat-input');
+      input.value = (input.value ? input.value + ' ' : '') + transcript;
+      resetInactivityTimers();
+    };
+    Voice.recognizer.onerror = (e)=>{
+      stopListening();
+      if(e.error === 'not-allowed' || e.error === 'permission-denied'){
+        addBubble('system', "Microphone access was blocked — check your browser's site permissions to use voice input.");
+      } else if(e.error !== 'no-speech' && e.error !== 'aborted'){
+        addBubble('system', "Voice input error (" + e.error + ") — you can still type your question.");
+      }
+    };
+    Voice.recognizer.onend = ()=> stopListening();
+    el('#btn-mic').addEventListener('click', ()=>{
+      if(Voice.recognizing) stopListening(); else startListening();
+    });
+  }
+}
+function startListening(){
+  if(!Voice.recognizer || Voice.recognizing) return;
+  try{
+    Voice.recognizer.start();
+    Voice.recognizing = true;
+    el('#btn-mic').classList.add('listening');
+    el('#btn-mic').textContent = '⏹';
+  } catch(e){ /* already started, ignore */ }
+}
+function stopListening(){
+  if(!Voice.recognizer) return;
+  Voice.recognizing = false;
+  el('#btn-mic').classList.remove('listening');
+  el('#btn-mic').textContent = '🎤';
+  try{ Voice.recognizer.stop(); } catch(e){}
+}
+initVoiceFeatures();
+function addHintBubble(hint, auto){
+  const empty = el('#chat-empty'); if(empty) empty.remove();
+  const scroll = el('#chat-scroll');
+  const div = document.createElement('div');
+  div.className = 'bubble hint';
+  const labels = {news:'📰 In the news', question:'❓ Try asking', nudge:'💡 Nudge'};
+  const prefix = auto ? 'Still there? Here\u2019s a hint — ' : '';
+  div.innerHTML = `<span class="hint-label">${esc(labels[hint.type] || 'Hint')}</span>${esc(prefix + hint.text)}`;
+  scroll.appendChild(div); scroll.scrollTop = scroll.scrollHeight;
+}
+const QUESTION_TYPE_ORDER = {situation:0, problem:1, implication:2, needpayoff:3, closed:-1, other:-1};
+function conversationStage(){
+  if(Coach.messages.filter(m=>m.who==='rep').length === 0) return 'opening';
+  let maxOrder = -1;
+  Coach.turnScores.forEach(t=>{
+    const o = QUESTION_TYPE_ORDER[t.questionType];
+    if(o !== undefined && o > maxOrder) maxOrder = o;
+  });
+  if(maxOrder < 1) return 'need_problem';
+  if(maxOrder === 1) return 'need_implication';
+  if(maxOrder === 2) return 'need_needpayoff';
+  return 'deepen';
+}
+function uncoveredHiddenPieces(){
+  const p = Coach.profile;
+  if(!p || !p.hiddenPains) return [];
+  const touched = new Set(Coach.turnScores.filter(t=>t.piece && LEVEL_SCORE[t.qualification] >= 2).map(t=>t.piece));
+  return p.hiddenPains.filter(hp=>!touched.has(hp.piece));
+}
+function pickContextualHint(){
+  const hints = (Coach.profile && Coach.profile.hints) || [];
+  if(!hints.length) return null;
+  const stage = conversationStage();
+  const uncovered = uncoveredHiddenPieces();
+  const withIdx = hints.map((h,i)=>({h,i}));
+  const unusedByType = (type) => withIdx.filter(x=> x.h.type===type && !Coach.usedHints.has(x.i));
+  const anyUnused = () => withIdx.filter(x=> !Coach.usedHints.has(x.i));
+
+  // Pick candidates based on where the conversation actually is right now.
+  let candidates = [];
+  if(stage==='opening'){
+    candidates = unusedByType('news'); // a news hook is the natural way to open
+  } else if(stage==='need_problem' || stage==='need_implication' || stage==='need_needpayoff'){
+    candidates = unusedByType('nudge'); // stuck at this SPIN stage -> nudge on technique
+    if(!candidates.length && uncovered.length) candidates = unusedByType('question');
+  } else { // 'deepen' -- core SPIN sequence has been used at least once already
+    if(uncovered.length) candidates = unusedByType('question'); // point at an area not yet found
+  }
+  if(!candidates.length) candidates = anyUnused();
+  if(!candidates.length){
+    Coach.usedHints.clear(); // all 5 have been shown at least once -- allow sensible repeats
+    candidates = withIdx;
+  }
+  const pick = candidates[Math.floor(Math.random()*candidates.length)];
+  Coach.usedHints.add(pick.i);
+  return pick.h;
+}
+function showNextHint(auto){
+  if(Coach.ended) return;
+  const hint = pickContextualHint();
+  if(!hint) return;
+  addHintBubble(hint, auto);
+}
+el('#btn-hint').addEventListener('click', ()=>{ showNextHint(false); resetInactivityTimers(); });
+
+function resetInactivityTimers(){
+  clearTimeout(Coach.hintNudgeTimer);
+  clearTimeout(Coach.inactivityEndTimer);
+  if(Coach.ended) return;
+  Coach.hintNudgeTimer = setTimeout(()=>{
+    if(!Coach.ended) showNextHint(true);
+  }, HINT_NUDGE_MS);
+  Coach.inactivityEndTimer = setTimeout(()=>{
+    if(!Coach.ended){
+      addBubble('system', "No activity for a while — wrapping up and scoring the call so far.");
+      endScenario();
+    }
+  }, INACTIVITY_END_MS);
+}
+function showTyping(){
+  const scroll = el('#chat-scroll');
+  const div = document.createElement('div'); div.className='typing'; div.id='typing-indicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  scroll.appendChild(div); scroll.scrollTop = scroll.scrollHeight;
+}
+function hideTyping(){ const t = el('#typing-indicator'); if(t) t.remove(); }
+
+const chatInput = el('#chat-input');
+chatInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendRepMessage(); } });
+el('#btn-send').addEventListener('click', sendRepMessage);
+
+async function sendRepMessage(){
+  if(Coach.busy || Coach.ended) return;
+  const text = chatInput.value.trim();
+  if(!text) return;
+  stopListening();
+  chatInput.value = '';
+  addBubble('rep', text);
+  Coach.messages.push({who:'rep', text});
+  Coach.busy = true; el('#btn-send').disabled = true; showTyping();
+  resetInactivityTimers();
+
+  try{
+    let result = Coach.mode==='ai' ? await roleplayTurnViaAPI(text) : localRoleplayTurn(text);
+    hideTyping();
+    addBubble('customer', result.reply, Coach.profile.persona.name);
+    Coach.messages.push({who:'customer', text:result.reply});
+    if(result.scoring){ Coach.turnScores.push(result.scoring); updateGauge(); }
+  } catch(err){
+    hideTyping();
+    addBubble('system', "Couldn't reach the AI coach (" + err.message + ") — switching to offline practice mode.");
+    Coach.mode = 'offline'; setModeBadge('offline');
+    const result = localRoleplayTurn(text);
+    addBubble('customer', result.reply, Coach.profile.persona.name);
+    Coach.messages.push({who:'customer', text:result.reply});
+    Coach.turnScores.push(result.scoring); updateGauge();
+  }
+  Coach.busy = false; el('#btn-send').disabled = false; chatInput.focus();
+}
+el('#btn-end-scenario').addEventListener('click', ()=> endScenario());
+
+/* =========================================================================
+   AI CALLS (routed through the unified callAI dispatcher)
+   ========================================================================= */
+async function generateProfileViaAPI(difficulty){
+  difficulty = difficulty || 'warm';
+  const difficultyInstructions = {
+    warm: "This persona should be WARM: friendly, approachable, reasonably forthcoming once they trust the rep isn't wasting their time. Most calls should be like this — the point is to build a junior rep's confidence, not test them.",
+    brisk: "This persona should be BRISK: businesslike, a little short on time, not unfriendly but won't hand things over easily — the rep needs to ask a genuinely relevant question before getting real detail, rather than everything opening up on the first ask.",
+    dismissive: "This persona should be more DISMISSIVE at first: skeptical of yet another sales call, may open with a curt brush-off or visible impatience, and needs the rep to work a bit to earn real engagement. Still entirely professional and never abusive or hostile — just a genuinely tougher, realistic call that a rep needs to work for. This should still be winnable with good questions, not a trap."
+  };
+  const system = `You generate realistic Irish SME customer profiles for a sales-training simulator used by junior SME sales reps. The rep should still have to discover the specific pains themselves through good questioning — but the industry and company description should give enough real-world texture that an attentive rep can reasonably anticipate what KIND of technology areas are likely relevant for a business like this, the way a competent rep would going into any real call. Respond with ONLY a valid JSON object, no markdown fences, no commentary, matching exactly this schema:
+{
+ "companyName": string (a plausible, entirely fictional Irish SME business name fitting the sector, e.g. "The Harbour View Hotel", "Kelly Manufacturing Ltd", "Brennan & Associates" — must not resemble or reference any real company),
+ "industry": string (a specific SME sub-sector, not just a broad category — e.g. "Boutique hotel", "Accountancy practice", "Contract manufacturer", "Multi-site retailer", "Freight & logistics", "Healthcare practice", "Construction contractor" — specific enough that its typical technology needs are inferable, e.g. a hotel implies guest Wi-Fi and hospitality security, a logistics firm implies mobile/field devices),
+ "employees": number (between 8 and 220, used internally for realism — shown to the rep only as a vague size band, never the exact figure),
+ "description": string (two short sentences giving real operational texture — number of sites, type of customers, general shape of day-to-day operations — enough to reasonably suggest relevant technology needs, e.g. multiple sites implies inter-site connectivity, guest-facing implies guest Wi-Fi and physical security, a mobile workforce implies device management. Do NOT state any of the specific hidden pains directly or name specific systems/vendors),
+ "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
+ "persona": {"name": string (Irish-sounding full name), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
+ "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away,
+ "openingLine": string, the first thing the persona says when the call starts — must not reveal any pains directly,
+ "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
+   - exactly 1 of type "news": a plausible, general (not fabricated specific/false) industry news angle relevant to this sector that could open a conversation, e.g. "Ransomware attacks on small hospitality businesses have been widely reported recently — worth raising as a natural opener." Keep it generic/plausible, not a specific invented headline or company,
+   - exactly 2 of type "question": concrete example discovery questions the rep could ask next, each tailored towards one of the actual hidden pains above (phrased as advice, e.g. "Try asking how many mobile devices they manage and who owns them — that's often revealing here"),
+   - exactly 2 of type "nudge": general technique reminders tied to this specific call, e.g. "You've asked what they have, but not yet what it costs them if it goes wrong — that's usually where the real story is" or "Try asking what would happen if this got worse, not just whether it's a problem"
+   Order them from most useful early in the call to most useful later.
+}
+${difficultyInstructions[difficulty]}
+Make each profile meaningfully different from a generic example: vary the sector, size, persona and which of the focus areas are hidden pains. The focus areas are:
+${pieceCriteriaBlock()}`;
+  const text = await callAI(system, [{role:'user', content:'Generate a new, unique SME profile now.'}], 1100);
+  const data = extractJSON(text);
+  if(!data.persona || !data.hiddenPains) throw new Error('Malformed profile');
+  data.difficulty = difficulty;
+  if(!Array.isArray(data.hints) || !data.hints.length) data.hints = genericHints();
+  return data;
+}
+
+async function roleplayTurnViaAPI(repText){
+  const p = Coach.profile;
+  const difficulty = p.difficulty || 'warm';
+  const forthcomingByDifficulty = {
+    warm: `- A generic or broad question (e.g. "how's everything going?") can get a light, friendly answer that gestures at a general area without full detail.
+- Any question that is clearly ON TOPIC for one of your real issues — even if it's not perfectly phrased or textbook SPIN — should get a genuinely helpful, fairly open answer, including real specifics. Don't make the rep ask three perfect follow-ups to earn one useful fact; reward curiosity and relevant follow-through.
+- If the rep asks something too vague to connect to anything specific, you can gently hint that there's more to the story ("Actually, now that you mention it...") to invite them to keep digging, rather than flatly deflecting.
+- Reserve genuinely vague or deflecting answers for questions that are off-topic, purely small talk, or so generic they could apply to any business.`,
+    brisk: `- You're busy and won't hand over detail on a generic or vague question — a broad "how's everything going?" gets a short, non-committal answer.
+- A question that is clearly, specifically on-topic for one of your real issues earns a real, honest answer — you're not trying to hide anything, you just don't volunteer it without being asked properly.
+- You won't hint or invite further digging the way a warmer persona might — if they don't ask well, the conversation just moves on.
+- Stay professional throughout — brisk and time-pressured, not rude.`,
+    dismissive: `- You're skeptical of sales calls generally and may open with visible impatience or a brush-off. A generic or vague question gets a curt, unhelpful answer, possibly mildly dismissive.
+- Even a specific, well-targeted question about a real issue should only get a partial answer at first — make the rep work a little (a reasonable follow-up should then get the real detail; don't require more than one good follow-up).
+- Never actually abusive, hostile, or cruel — just realistically hard to get going, the way a genuinely busy, unconvinced prospect would be. This should still be winnable with good technique.`
+  };
+  const system = `You are roleplaying as ${p.persona.name}, the ${p.persona.role} at ${p.companyName || 'a small business'}, a ${p.employees}-employee ${p.industry} business in Ireland. Company context: ${p.description} Tone: ${p.persona.tone}
+What you actually care about day to day: ${p.whatTheyCareAbout || 'running the business smoothly and keeping customers happy'} — when you talk about any of your real issues below, frame it in terms of THIS, not abstract technology language. You're not an IT person (unless your role says otherwise) — you think in terms of guests, patients, customers, deliveries, deadlines or reputation, not "network downtime."
+You are being spoken to by a JUNIOR sales rep who is still building confidence and skill at discovery calls. This is a training exercise, so your job is to give them a fair chance to succeed appropriate to your temperament below — not to be an impossible brick wall.
+Your business's ACTUAL underlying issues are below — don't blurt these out unprompted:
+${forthcomingByDifficulty[difficulty]}
+Hidden pains:
+${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
+Stay fully in character, realistic, 1 to 4 sentences per reply. Never break character or mention this is a simulation.
+After your reply, evaluate the REP'S LAST MESSAGE for sales qualification quality against these solution focus areas and their qualification criteria:
+${pieceCriteriaBlock()}
+Score it as:
+- piece: the single best-matching area id from [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], or null if unrelated/small talk
+- questionType: "situation" | "problem" | "implication" | "needpayoff" | "closed" | "other" — classify which SPIN stage the rep's message best represents
+- relevance: integer 0-3, how relevant to a REAL hidden pain in this business (0 = irrelevant, 3 = hits directly on a hidden pain with good framing)
+- qualification: "none" | "surface" | "developing" | "qualified" — how much this exchange advanced genuine qualification. Score generously for a junior rep: any clearly relevant, on-topic question that engages with a real pain should score at least "developing" even if the phrasing isn't textbook SPIN — reserve "none"/"surface" for questions that are genuinely off-topic, closed, or so generic they don't advance anything
+- note: one short, encouraging coaching-style sentence — praise the attempt where possible, and if there's a better version of the question, show it briefly rather than just criticising
+
+Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
+{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "note": "..."}}`;
+
+  const history = [];
+  Coach.messages.forEach(m=>{ if(m.who==='rep') history.push({role:'user', content:m.text}); else history.push({role:'assistant', content:m.text}); });
+  history.push({role:'user', content:repText});
+
+  const text = await callAI(system, history, 500);
+  const data = extractJSON(text);
+  if(typeof data.reply !== 'string') throw new Error('Malformed turn response');
+  return data;
+}
+
+async function finalScoringViaAPI(){
+  const p = Coach.profile;
+  const transcript = Coach.messages.map(m=> (m.who==='rep' ? 'Rep: ' : (p.persona.name+': ')) + m.text).join('\n');
+  const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
+  const difficulty = p.difficulty || 'warm';
+  const system = `You are a sales coaching engine reviewing a structured discovery conversation between a JUNIOR sales rep and a simulated SME customer. The audience for this feedback is a junior rep still building confidence — be encouraging and constructive in tone throughout, not harsh or nitpicky. Prioritise recognising active questioning and genuine curiosity over penalising imperfect technique; a rep who asked plenty of relevant questions and kept the conversation moving should score reasonably well even if not every question was a perfectly-formed Implication or Need-payoff question.
+This customer persona was deliberately set to "${difficulty}" difficulty (warm = easy and forthcoming, brisk = businesslike and has to be asked well, dismissive = genuinely tough to get going). Factor this in fairly: if difficulty was "dismissive" or "brisk", give extra credit for whatever the rep did manage to uncover, since it was genuinely harder to extract — don't penalise them as if this were an easy warm call.
+Customer profile: ${p.companyName || 'the company'}, ${p.industry}, ${p.employees} employees, persona ${p.persona.name} (${p.persona.role}).
+The customer's REAL hidden pains, not known to the rep in advance, were:
+${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
+The rep asked ${questionCount} questions during this call.
+Turn-by-turn scoring already computed during the call:
+${JSON.stringify(Coach.turnScores)}
+Full transcript:
+${transcript}
+
+Produce a final qualification scorecard. Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
+{
+ "overallLevel": "Discovery Stage"|"Developing Opportunity"|"Qualified Opportunity"|"Hot Opportunity",
+ "overallScore": integer 0-100,
+ "perArea": [{"piece": id, "level":"none"|"surface"|"developing"|"qualified", "note": short string}] — include only areas that were touched on OR that had a hidden pain,
+ "missedPains": [short strings describing hidden pains never meaningfully uncovered — phrase these as gentle "next time, try asking about..." pointers, not criticism],
+ "strengths": [2 to 3 short strings — actively look for and credit good questioning habits: asking follow-ups, staying curious, covering multiple areas, keeping the conversation open rather than closed, and if the persona was brisk/dismissive, credit persistence specifically],
+ "improvements": [2 to 3 short strings, framed as encouraging next-step suggestions rather than faults — e.g. "Try asking..." rather than "You failed to..."],
+ "summary": "2 to 3 sentence encouraging coaching summary written directly to the rep, second person, ending on a constructive note. If difficulty was brisk or dismissive, acknowledge that this was a tougher call than usual."
+}`;
+  const text = await callAI(system, [{role:'user', content:'Produce the final scorecard now.'}], 900);
+  return extractJSON(text);
+}
+
+/* =========================================================================
+   OFFLINE FALLBACK ENGINE
+   ========================================================================= */
+const DEFLECTIONS = [
+  "That's not really something I've thought about, to be honest — anything specific prompting the question?",
+  "I'd have to check on that — it's not top of mind for me right now.",
+  "Hard to say off the top of my head. Why do you ask?",
+  "We're fairly busy day to day, so I couldn't tell you the details offhand.",
+  "I think it's fine generally, but I'm not the one who'd know the specifics."
+];
+const HINTS = [
+  "Actually, now that you mention it, there might be something there worth a closer look.",
+  "Hmm — good question. There's a bit more to that than I'd normally say off the cuff.",
+  "That's actually closer to something than you might expect — worth asking a bit more on that."
+];
+function matchPiece(text){
+  const lower = text.toLowerCase();
+  let best = null, bestHits = 0;
+  Object.keys(PIECE_KEYWORDS).forEach(id=>{
+    const hits = PIECE_KEYWORDS[id].filter(k=>lower.includes(k)).length;
+    if(hits>bestHits){ bestHits = hits; best = id; }
+  });
+  return bestHits>0 ? best : null;
+}
+function probeStrength(text){
+  const lower = text.toLowerCase();
+  return PROBE_WORDS.filter(w=>lower.includes(w)).length;
+}
+function localRoleplayTurn(repText){
+  const p = Coach.profile;
+  const difficulty = p.difficulty || 'warm';
+  const pieceId = matchPiece(repText);
+  const strength = probeStrength(repText);
+  const hiddenPain = pieceId ? p.hiddenPains.find(hp=>hp.piece===pieceId) : null;
+  // Tougher personas need a sharper question (higher probe strength) before opening up.
+  const threshold = difficulty==='dismissive' ? 2 : 1;
+  let reply, qualification, relevance, questionType;
+  questionType = strength>=2 ? 'implication' : (repText.trim().endsWith('?') ? 'situation' : 'other');
+  if(hiddenPain && strength>=threshold){ reply = "Actually, yes — " + hiddenPain.detail + "."; qualification='qualified'; relevance=3; }
+  else if(hiddenPain){ reply = HINTS[Math.floor(Math.random()*HINTS.length)]; qualification='developing'; relevance=2; }
+  else if(pieceId){ reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='surface'; relevance=1; }
+  else { reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='none'; relevance=0; }
+  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, note:'Offline heuristic scoring — connect an AI provider in Settings for full coaching.' } };
+}
+function localFinalScoring(){
+  const p = Coach.profile;
+  const perArea = []; const covered = {};
+  Coach.turnScores.forEach(t=>{ if(!t.piece) return; if(!covered[t.piece] || LEVEL_SCORE[t.qualification] > LEVEL_SCORE[covered[t.piece]]) covered[t.piece]=t.qualification; });
+  Object.keys(covered).forEach(id=> perArea.push({piece:id, level:covered[id], note:'Best signal reached during the call.'}));
+  p.hiddenPains.forEach(hp=>{ if(!covered[hp.piece]) perArea.push({piece:hp.piece, level:'none', note:'Not explored during the call — worth asking about next time.'}); });
+  const missedPains = p.hiddenPains.filter(hp=> !covered[hp.piece] || LEVEL_SCORE[covered[hp.piece]]<2).map(hp=> 'Next time, try asking more about ' + PIECE_BY_ID[hp.piece].name.toLowerCase() + '.');
+  const totalScore = perArea.reduce((s,a)=>s+LEVEL_SCORE[a.level],0);
+  const pct = Math.round((totalScore/(PIECES.length*3))*100);
+  const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
+  let overallLevel = 'Discovery Stage';
+  if(pct>=55) overallLevel='Hot Opportunity'; else if(pct>=32) overallLevel='Qualified Opportunity'; else if(pct>=12) overallLevel='Developing Opportunity';
+  return {
+    overallLevel, overallScore: pct, perArea,
+    missedPains: missedPains.length? missedPains : ['Good coverage — you asked about most of the known pain areas.'],
+    strengths:[
+      questionCount>=6 ? `You asked ${questionCount} questions and kept the conversation moving — that's exactly the right instinct.` : 'You kept the conversation moving and asked genuine questions.',
+      'You engaged directly rather than pitching too early — good discipline for a first call.'
+    ],
+    improvements:['Try asking a follow-up "what happens when..." or "what does that cost you" question after each answer — that\'s usually where the real detail comes out.','Keep going a little further into more of the focus areas before wrapping up.'],
+    summary:"This is an offline practice summary based on simple keyword matching, since no AI provider is connected — treat it as a rough guide rather than detailed feedback. Add an API key in Settings for full AI-generated coaching."
+  };
+}
+
+/* =========================================================================
+   END SCENARIO / SCORECARD
+   ========================================================================= */
+async function endScenario(){
+  if(Coach.ended) return;
+  Coach.ended = true;
+  clearTimeout(Coach.hintNudgeTimer); clearTimeout(Coach.inactivityEndTimer);
+  stopListening();
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  chatInput.disabled = true; el('#btn-send').disabled = true; el('#btn-hint').disabled = true;
+  addBubble('system', "Ending call — scoring your conversation…");
+  let data;
+  try{ data = Coach.mode==='ai' ? await finalScoringViaAPI() : localFinalScoring(); }
+  catch(err){ data = localFinalScoring(); }
+  renderScorecard(data); openModal();
+}
+const RAG = {
+  qualified:{band:'green', color:'#00996C', bg:'#DFF7EC', label:'Green'},
+  developing:{band:'amber', color:'#B9791F', bg:'#FBF0DD', label:'Amber'},
+  surface:{band:'amber', color:'#B9791F', bg:'#FBF0DD', label:'Amber'},
+  none:{band:'red', color:'#B54A38', bg:'#FBEAE6', label:'Red'}
+};
+const SCORE_OUT_OF_10 = {none:0, surface:4, developing:7, qualified:10};
+function levelPillHTML(level){
+  const rag = RAG[level] || RAG.none;
+  const lv = LEVELS[level] || LEVELS.none;
+  return `<span class="ac-lvl" style="background:${rag.bg};color:${rag.color};">${lv.label}</span>`;
+}
+function renderScorecard(data){
+  const p = Coach.profile;
+  el('#modal-sub').textContent = (p.companyName ? p.companyName + ' · ' : '') + p.industry + ' · ' + p.persona.name + ' (' + p.persona.role + ')';
+  const overallColorMap = {
+    'Discovery Stage':{bg:'#EEF0F2', color:'#5B6272'},
+    'Developing Opportunity':{bg:'#E6F0FA', color:'#2C6FB0'},
+    'Qualified Opportunity':{bg:'#DFF7EC', color:'#00996C'},
+    'Hot Opportunity':{bg:'#23283C', color:'#01C088'}
+  };
+  const oc = overallColorMap[data.overallLevel] || overallColorMap['Discovery Stage'];
+  const banner = el('#overall-banner');
+  banner.style.background = oc.bg; banner.style.color = oc.color;
+  el('#modal-score-num').textContent = data.overallScore + '/100';
+  el('#modal-score-lvl').textContent = data.overallLevel;
+  el('#modal-score-sub').textContent = 'Overall opportunity qualification score';
+
+  const areasHTML = (data.perArea||[]).map(a=>{
+    const piece = PIECE_BY_ID[a.piece]; if(!piece) return '';
+    const rag = RAG[a.level] || RAG.none;
+    const score10 = SCORE_OUT_OF_10[a.level] !== undefined ? SCORE_OUT_OF_10[a.level] : 0;
+    return `<div class="area-card rag-${rag.band}">
+      <div class="ac-top">
+        <span class="ac-name"><span class="rag-dot" style="background:${rag.color};"></span>${piece.icon} ${esc(piece.short)}</span>
+        <span class="area-score-num" style="color:${rag.color};">${score10}/10</span>
+      </div>
+      <div class="ac-note">${esc(a.note||'')}</div>
+    </div>`;
+  }).join('');
+  el('#modal-areas').innerHTML = areasHTML || '<p class="log-empty">No areas were explored during this call.</p>';
+
+  const missedWrap = el('#modal-missed-wrap');
+  if(data.missedPains && data.missedPains.length){
+    el('#modal-missed').innerHTML = data.missedPains.map(m=>`<li>${esc(m)}</li>`).join('');
+    missedWrap.classList.remove('hidden');
+    missedWrap.classList.add('modal-section-tinted','rag-red');
+  } else {
+    missedWrap.classList.add('hidden');
+    missedWrap.classList.remove('modal-section-tinted','rag-red');
+  }
+
+  el('#modal-strengths').innerHTML = (data.strengths||[]).map(s=>`<li>${esc(s)}</li>`).join('');
+  el('#modal-strengths-wrap').classList.add('modal-section-tinted','rag-green');
+  el('#modal-improve').innerHTML = (data.improvements||[]).map(s=>`<li>${esc(s)}</li>`).join('');
+  el('#modal-improve-wrap').classList.add('modal-section-tinted','rag-amber');
+
+  el('#modal-summary').textContent = data.summary || '';
+}
+function openModal(){ el('#modal-backdrop').classList.add('show'); }
+function closeModal(){ el('#modal-backdrop').classList.remove('show'); }
+el('#btn-modal-close').addEventListener('click', closeModal);
+el('#modal-backdrop').addEventListener('click', (e)=>{ if(e.target.id==='modal-backdrop') closeModal(); });
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+renderHome();
+setView('home');
