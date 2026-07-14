@@ -120,7 +120,8 @@ const PIECE_KEYWORDS = {
   'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation'],
   'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
   'managed-security':['security','monitor','soc','edr','endpoint detection','endpoint detection and response','antivirus','threat','breach','incident'],
-  'eir-services':['internet','connectivity','broadband','fibre','bandwidth','site','line speed'],
+  'eir-services':['internet','connectivity','broadband','fibre','bandwidth','site','line speed','lan','wan','lan/wan','switching','switches','wiring'],
+  'cloud-infrastructure':['azure','cloud','virtual desktop','vdi','virtualisation','virtualization','migration','on-prem','on prem','physical server','servers','hosting','vpn'],
   'secure-access-edge':['vpn','zero trust','ztna','sase','branch','remote access','cloud app','shadow it'],
   'eir-support':['support','helpdesk','sla','escalation','who do you call','fix it']
 };
