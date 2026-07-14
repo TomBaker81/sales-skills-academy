@@ -96,6 +96,18 @@ const FALLBACK_PROFILES = [
       {piece:'secure-access-edge', severity:'low', detail:'fully remote-friendly team connecting from home networks with no consistent secure access policy'}
     ],
     openingLine:"I've got about ninety seconds before my next call — what's this actually about?"
+  },
+  {
+    companyName:'Whelan Property Services', industry:'Facilities & property maintenance', employees:56, difficulty:'warm',
+    description:"A property maintenance and facilities company with a field team of engineers and technicians visiting client sites daily across the region. Growth has meant more vans, more phones, and more sites than a couple of years ago.",
+    whatTheyCareAbout:"Keeping the field team equipped and jobs moving without wasted admin time — anything that slows down a technician getting to the next job or costs money unnecessarily is what actually bothers him.",
+    persona:{name:'Paul Whelan', role:'Operations Director (C-level)', category:'C-Level', tone:'Warm and practical, thinks in terms of keeping the vans moving rather than technology for its own sake — happy to talk once he sees the relevance to the day-to-day.'},
+    hiddenPains:[
+      {piece:'mobile-security', severity:'high', detail:'mobile contract for the whole field team is up for renewal in the next couple of months, current phones have no MDM or mobile threat defence at all, and the office laptops back at base have no EDR either — nobody has looked at protection as part of the renewal, just pricing on new handsets'},
+      {piece:'backup-dr', severity:'medium', detail:'job and client records backed up locally at the office only, never restore-tested'},
+      {piece:'eir-support', severity:'low', detail:'juggling separate suppliers for mobile, office IT and backup with no single point of contact'}
+    ],
+    openingLine:"Hi, yeah go on — we're actually just about to start shopping around for new phones for the team, so timing's alright."
   }
 ];
 
@@ -104,7 +116,7 @@ const PIECE_KEYWORDS = {
   'cloud-voice':['phone','voice','call','pstn','isdn','voip','webex','collaborate','line'],
   'backup-dr':['backup','restore','disaster','recovery','ransomware','data loss','dr '],
   'm365':['microsoft','365','office','teams','sharepoint','licence','license','mfa','entra','conditional access'],
-  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet'],
+  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet','contract renewal','handset','upgrade','mtd','mobile threat','edr','endpoint detection'],
   'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation'],
   'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
   'managed-security':['security','monitor','soc','edr','antivirus','threat','breach','incident'],
