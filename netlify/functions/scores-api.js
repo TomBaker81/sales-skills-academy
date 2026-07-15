@@ -15,6 +15,27 @@ const { getStore, connectLambda } = require('@netlify/blobs');
 
 const MAX_ENTRIES = 2000; // simple cap so the blob can't grow unbounded
 
+// Fields anyone can see via the public Leaderboard (best score per rep) —
+// deliberately excludes per-call coaching detail (missedPains, improvements,
+// strengths, stageCounts, avgRelevance), which is only for the token-gated
+// Manager Report. Without this split, the sensitive coaching data would be
+// readable by anyone who called this endpoint directly, regardless of
+// whether the manager password gate in the UI was ever shown.
+const PUBLIC_FIELDS = ['name', 'score', 'level', 'company', 'difficulty', 'timestamp'];
+function toPublicEntry(e){
+  const out = {};
+  PUBLIC_FIELDS.forEach(f => { out[f] = e[f]; });
+  return out;
+}
+async function isValidManagerToken(token){
+  if(!token) return false;
+  try {
+    const sessionStore = getStore('manager-sessions');
+    const session = await sessionStore.get(token, { type: 'json' });
+    return !!session && session.expires > Date.now();
+  } catch (e) { return false; }
+}
+
 exports.handler = async (event) => {
   connectLambda(event);
   const corsHeaders = {
@@ -37,7 +58,10 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'GET') {
     try {
       const entries = (await store.get('entries', { type: 'json' })) || [];
-      return { statusCode: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ entries }) };
+      const params = event.queryStringParameters || {};
+      const hasManagerAccess = await isValidManagerToken(params.token);
+      const responseEntries = hasManagerAccess ? entries : entries.map(toPublicEntry);
+      return { statusCode: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: responseEntries, managerAccess: hasManagerAccess }) };
     } catch (err) {
       return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Failed to read scores: ' + err.message }) };
     }
@@ -90,9 +114,15 @@ exports.handler = async (event) => {
 
   if (event.httpMethod === 'DELETE') {
     // Removes entries matching an exact name — deliberately scoped to one
-    // person's entries rather than a full-table wipe, so a shared public
-    // endpoint can't accidentally (or maliciously) clear everyone's scores.
+    // person's entries rather than a full-table wipe, so this can't
+    // accidentally (or maliciously) clear everyone's scores. Also requires a
+    // valid manager session token, since deletion is more sensitive than
+    // reading and shouldn't be callable by anyone who finds the URL.
     const params = event.queryStringParameters || {};
+    const hasManagerAccess = await isValidManagerToken(params.token);
+    if (!hasManagerAccess) {
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Manager authentication required to delete entries.' }) };
+    }
     const name = String(params.name || '').trim();
     if (!name) {
       return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'name query parameter is required' }) };

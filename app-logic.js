@@ -566,17 +566,18 @@ const Leaderboard = {
       });
     } catch(e){ /* scorecard is still shown to the rep even if the save fails */ }
   },
-  async fetchEntries(){
+  async fetchEntries(token){
     try{
-      const resp = await fetch(this.API_URL, { method:'GET' });
+      const url = token ? `${this.API_URL}?token=${encodeURIComponent(token)}` : this.API_URL;
+      const resp = await fetch(url, { method:'GET' });
       if(!resp.ok) return null;
       const data = await resp.json();
       return Array.isArray(data.entries) ? data.entries : [];
     } catch(e){ return null; }
   },
-  async deleteByName(name){
+  async deleteByName(name, token){
     try{
-      const resp = await fetch(this.API_URL + '?name=' + encodeURIComponent(name), { method:'DELETE' });
+      const resp = await fetch(this.API_URL + '?name=' + encodeURIComponent(name) + '&token=' + encodeURIComponent(token||''), { method:'DELETE' });
       if(!resp.ok) return null;
       return await resp.json();
     } catch(e){ return null; }
@@ -1109,27 +1110,45 @@ async function renderLeaderboard(){
 /* =========================================================================
    MANAGER REPORT
    ========================================================================= */
-const MANAGER_PASSWORD = 'xAojCAm4tmjH';
-function initManagerView(){
-  const unlocked = sessionStorage.getItem('ssa_manager_unlocked') === '1';
-  if(unlocked){
-    el('#manager-gate').classList.add('hidden');
-    el('#manager-body').classList.remove('hidden');
-    renderManagerReport();
-    return;
+const MANAGER_AUTH_URL = '/.netlify/functions/manager-auth';
+async function initManagerView(){
+  const storedToken = sessionStorage.getItem('ssa_manager_token');
+  if(storedToken){
+    try{
+      const resp = await fetch(MANAGER_AUTH_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'check', token:storedToken}) });
+      const data = await resp.json();
+      if(data.ok){
+        el('#manager-gate').classList.add('hidden');
+        el('#manager-body').classList.remove('hidden');
+        renderManagerReport();
+        return;
+      }
+    } catch(e){ /* fall through to showing the gate again */ }
+    sessionStorage.removeItem('ssa_manager_token');
   }
   el('#manager-gate').classList.remove('hidden');
   el('#manager-body').classList.add('hidden');
   const btn = el('#manager-unlock-btn');
   const input = el('#manager-pass-input');
-  const tryUnlock = ()=>{
-    if(input.value === MANAGER_PASSWORD){
-      sessionStorage.setItem('ssa_manager_unlocked', '1');
-      el('#manager-gate').classList.add('hidden');
-      el('#manager-body').classList.remove('hidden');
-      renderManagerReport();
-    } else {
+  const tryUnlock = async ()=>{
+    btn.disabled = true;
+    try{
+      const resp = await fetch(MANAGER_AUTH_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'verify', password:input.value}) });
+      const data = await resp.json();
+      if(data.ok && data.token){
+        sessionStorage.setItem('ssa_manager_token', data.token);
+        el('#manager-gate').classList.add('hidden');
+        el('#manager-body').classList.remove('hidden');
+        renderManagerReport();
+      } else {
+        el('#manager-gate-error').style.display = 'block';
+        el('#manager-gate-error').textContent = data.error || 'Incorrect password.';
+      }
+    } catch(e){
       el('#manager-gate-error').style.display = 'block';
+      el('#manager-gate-error').textContent = "Couldn't reach the server to check the password — check your connection and try again.";
+    } finally {
+      btn.disabled = false;
     }
   };
   btn.onclick = tryUnlock; // .onclick (not addEventListener) so re-entering this view doesn't stack duplicate handlers
@@ -1175,7 +1194,8 @@ function aggregateManagerData(entries){
 async function renderManagerReport(){
   const wrap = el('#manager-body');
   wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">Loading report…</p>`;
-  const entries = await Leaderboard.fetchEntries();
+  const managerToken = sessionStorage.getItem('ssa_manager_token');
+  const entries = await Leaderboard.fetchEntries(managerToken);
   if(entries === null){
     wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">Couldn't load report data — check your connection and switch back to this tab to retry.</p>`;
     return;
@@ -1264,7 +1284,7 @@ async function renderManagerReport(){
       const name = btn.dataset.name;
       if(!confirm(`Remove all leaderboard entries for "${name}"? This can't be undone.`)) return;
       btn.disabled = true; btn.textContent = 'Removing…';
-      const result = await Leaderboard.deleteByName(name);
+      const result = await Leaderboard.deleteByName(name, sessionStorage.getItem('ssa_manager_token'));
       if(result && result.ok){
         renderManagerReport(); // re-fetch and re-render so the removed rep disappears immediately
       } else {
