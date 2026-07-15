@@ -440,13 +440,13 @@ const Leaderboard = {
     const list = el('#rep-name-list');
     list.innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
   },
-  async submitScore({name, score, level, company, difficulty}){
+  async submitScore({name, score, level, company, difficulty, questionCount, areasTouched, stageCounts, avgRelevance, missedPains, improvements, strengths}){
     if(!name) return;
     try{
       await fetch(this.API_URL, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name, score, level, company, difficulty})
+        body: JSON.stringify({name, score, level, company, difficulty, questionCount, areasTouched, stageCounts, avgRelevance, missedPains, improvements, strengths})
       });
     } catch(e){ /* scorecard is still shown to the rep even if the save fails */ }
   },
@@ -594,9 +594,11 @@ function setView(name){
   el('#view-qual').classList.toggle('hidden', name!=='qual');
   el('#view-coach').classList.toggle('hidden', name!=='coach');
   el('#view-leaderboard').classList.toggle('hidden', name!=='leaderboard');
+  el('#view-manager').classList.toggle('hidden', name!=='manager');
   if(name==='home') renderHome();
   if(name==='training') renderTraining();
   if(name==='leaderboard') renderLeaderboard();
+  if(name==='manager') initManagerView();
   window.scrollTo({top:0, behavior:'smooth'});
 }
 els('.tab-btn').forEach(b=> b.addEventListener('click', ()=> setView(b.dataset.view)));
@@ -965,6 +967,158 @@ async function renderLeaderboard(){
       </table>
     </div>`;
 }
+
+/* =========================================================================
+   MANAGER REPORT
+   ========================================================================= */
+const MANAGER_PASSWORD = 'xAojCAm4tmjH';
+function initManagerView(){
+  const unlocked = sessionStorage.getItem('ssa_manager_unlocked') === '1';
+  if(unlocked){
+    el('#manager-gate').classList.add('hidden');
+    el('#manager-body').classList.remove('hidden');
+    renderManagerReport();
+    return;
+  }
+  el('#manager-gate').classList.remove('hidden');
+  el('#manager-body').classList.add('hidden');
+  const btn = el('#manager-unlock-btn');
+  const input = el('#manager-pass-input');
+  const tryUnlock = ()=>{
+    if(input.value === MANAGER_PASSWORD){
+      sessionStorage.setItem('ssa_manager_unlocked', '1');
+      el('#manager-gate').classList.add('hidden');
+      el('#manager-body').classList.remove('hidden');
+      renderManagerReport();
+    } else {
+      el('#manager-gate-error').style.display = 'block';
+    }
+  };
+  btn.onclick = tryUnlock; // .onclick (not addEventListener) so re-entering this view doesn't stack duplicate handlers
+  input.onkeydown = (e)=>{ if(e.key==='Enter') tryUnlock(); };
+}
+const STAGE_LABELS = {situation:'Situation', problem:'Problem', implication:'Implication', needpayoff:'Need-payoff', closed:'Closed', other:'Other'};
+function aggregateManagerData(entries){
+  const byName = {};
+  entries.forEach(e=>{
+    if(!e || !e.name) return;
+    if(!byName[e.name]) byName[e.name] = { name:e.name, calls:[] };
+    byName[e.name].calls.push(e);
+  });
+  return Object.values(byName).map(rep=>{
+    const calls = rep.calls.slice().sort((a,b)=> (a.timestamp||'').localeCompare(b.timestamp||''));
+    const n = calls.length;
+    const avgScore = Math.round(calls.reduce((s,c)=>s+(c.score||0),0)/n);
+    const relevances = calls.filter(c=>Number.isFinite(c.avgRelevance));
+    const avgRelevance = relevances.length ? Math.round((relevances.reduce((s,c)=>s+c.avgRelevance,0)/relevances.length)*10)/10 : null;
+    const stageTotals = {situation:0, problem:0, implication:0, needpayoff:0, closed:0, other:0};
+    calls.forEach(c=>{ if(c.stageCounts) Object.keys(stageTotals).forEach(k=> stageTotals[k]+= (c.stageCounts[k]||0)); });
+    const stageSum = Object.values(stageTotals).reduce((a,b)=>a+b,0);
+    const stageMix = {};
+    Object.keys(stageTotals).forEach(k=> stageMix[k] = stageSum ? Math.round((stageTotals[k]/stageSum)*100) : 0);
+    // Trend: compare the most recent calls to the earlier calls (needs at least 2 to say anything)
+    let trend = 'flat';
+    if(n >= 2){
+      const splitSize = n>=4 ? Math.floor(n/2) : 1;
+      const recentCalls = calls.slice(-splitSize);
+      const earlierCalls = calls.slice(0, n-splitSize);
+      const avgOf = arr => arr.reduce((s,c)=>s+(c.score||0),0)/arr.length;
+      if(earlierCalls.length && recentCalls.length){
+        const diff = avgOf(recentCalls) - avgOf(earlierCalls);
+        trend = diff > 4 ? 'up' : diff < -4 ? 'down' : 'flat';
+      }
+    }
+    const areasTouchedAvg = Math.round(calls.reduce((s,c)=>s+(c.areasTouched||0),0)/n);
+    const latestImprovements = calls[n-1].improvements || [];
+    const latestMissed = calls[n-1].missedPains || [];
+    return { name:rep.name, calls, n, avgScore, avgRelevance, stageMix, trend, areasTouchedAvg, latestImprovements, latestMissed };
+  }).sort((a,b)=> b.avgScore - a.avgScore);
+}
+async function renderManagerReport(){
+  const wrap = el('#manager-body');
+  wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">Loading report…</p>`;
+  const entries = await Leaderboard.fetchEntries();
+  if(entries === null){
+    wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">Couldn't load report data — check your connection and switch back to this tab to retry.</p>`;
+    return;
+  }
+  if(entries.length === 0){
+    wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">No calls logged yet.</p>`;
+    return;
+  }
+  const reps = aggregateManagerData(entries);
+  const teamAvgScore = Math.round(entries.reduce((s,e)=>s+(e.score||0),0)/entries.length);
+  const relevant = entries.filter(e=>Number.isFinite(e.avgRelevance));
+  const teamAvgRelevance = relevant.length ? Math.round((relevant.reduce((s,e)=>s+e.avgRelevance,0)/relevant.length)*10)/10 : null;
+  const stageTotalsTeam = {situation:0, problem:0, implication:0, needpayoff:0, closed:0, other:0};
+  entries.forEach(e=>{ if(e.stageCounts) Object.keys(stageTotalsTeam).forEach(k=> stageTotalsTeam[k] += (e.stageCounts[k]||0)); });
+  const stageSumTeam = Object.values(stageTotalsTeam).reduce((a,b)=>a+b,0);
+  const goodStagePct = stageSumTeam ? Math.round(((stageTotalsTeam.implication + stageTotalsTeam.needpayoff) / stageSumTeam) * 100) : 0;
+
+  const trendArrow = t => t==='up' ? '<span style="color:var(--teal-deep);">▲ improving</span>' : t==='down' ? '<span style="color:var(--danger);">▼ needs attention</span>' : '<span style="color:var(--ink-faint);">— steady</span>';
+  const stageBarHTML = mix => `
+    <div style="display:flex;height:8px;border-radius:5px;overflow:hidden;width:160px;">
+      ${Object.keys(STAGE_LABELS).map(k=>`<div title="${STAGE_LABELS[k]}: ${mix[k]}%" style="width:${mix[k]}%;background:${STAGE_COLORS[k]};"></div>`).join('')}
+    </div>`;
+
+  wrap.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px;">
+      <div class="mgr-stat"><div class="mgr-stat-num">${entries.length}</div><div class="mgr-stat-label">Calls logged</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${reps.length}</div><div class="mgr-stat-label">Active reps</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgScore}/100</div><div class="mgr-stat-label">Team avg score</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgRelevance ?? '—'}/3</div><div class="mgr-stat-label">Avg question relevance</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${goodStagePct}%</div><div class="mgr-stat-label">Questions were Implication / Need-payoff</div></div>
+    </div>
+    <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr style="background:var(--navy);color:#fff;text-align:left;">
+          <th style="padding:10px 14px;font-size:12px;">Rep</th>
+          <th style="padding:10px 14px;font-size:12px;">Calls</th>
+          <th style="padding:10px 14px;font-size:12px;">Avg score</th>
+          <th style="padding:10px 14px;font-size:12px;">Trend</th>
+          <th style="padding:10px 14px;font-size:12px;">Avg relevance</th>
+          <th style="padding:10px 14px;font-size:12px;">Question mix (S·P·I·N·Closed·Other)</th>
+          <th style="padding:10px 14px;font-size:12px;">Areas touched/call</th>
+        </tr>
+        ${reps.map((r,i)=>`
+        <tr style="border-top:1px solid var(--line);cursor:pointer;" class="mgr-rep-row" data-idx="${i}">
+          <td style="padding:10px 14px;font-weight:700;color:var(--navy);">${esc(r.name)}</td>
+          <td style="padding:10px 14px;">${r.n}</td>
+          <td style="padding:10px 14px;font-weight:700;color:var(--teal);">${r.avgScore}/100</td>
+          <td style="padding:10px 14px;font-size:12.5px;">${trendArrow(r.trend)}</td>
+          <td style="padding:10px 14px;">${r.avgRelevance ?? '—'}/3</td>
+          <td style="padding:10px 14px;">${stageBarHTML(r.stageMix)}</td>
+          <td style="padding:10px 14px;">${r.areasTouchedAvg}/${PIECES.length}</td>
+        </tr>
+        <tr class="mgr-rep-detail hidden" id="mgr-detail-${i}"><td colspan="7" style="padding:0;">
+          <div style="background:#fff;padding:16px 20px;border-top:1px dashed var(--line);">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+              <div>
+                <h5 style="margin:0 0 8px;color:var(--navy);font-size:13px;">Recent calls</h5>
+                <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--ink-soft);">
+                  ${r.calls.slice(-6).reverse().map(c=>`<li>${esc(c.company||'—')} — ${c.score}/100 (${esc(c.level||'')})</li>`).join('')}
+                </ul>
+              </div>
+              <div>
+                <h5 style="margin:0 0 8px;color:var(--navy);font-size:13px;">Current coaching focus</h5>
+                <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--ink-soft);">
+                  ${r.latestImprovements.map(x=>`<li>${esc(x)}</li>`).join('') || '<li>No specific gaps flagged in the most recent call.</li>'}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </td></tr>`).join('')}
+      </table>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each SPIN stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>`;
+
+  els('.mgr-rep-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      el('#mgr-detail-'+row.dataset.idx).classList.toggle('hidden');
+    });
+  });
+}
+const STAGE_COLORS = {situation:'#B9791F', problem:'#D98A3D', implication:'#01C088', needpayoff:'#00996C', closed:'#B54A38', other:'#8B8F99'};
 
 /* =========================================================================
    HOME / OVERVIEW RENDERING
@@ -1804,12 +1958,32 @@ async function endScenario(){
   try{ data = Coach.mode==='ai' ? await finalScoringViaAPI() : localFinalScoring(); }
   catch(err){ data = localFinalScoring(); }
   renderScorecard(data); openModal();
+
+  // Aggregate per-turn SPIN-stage stats (situation/problem/implication/needpayoff/
+  // closed/other counts, average relevance) — this is what actually shows a manager
+  // whether a rep is asking the right KIND of questions, not just their final score.
+  const stageCounts = {situation:0, problem:0, implication:0, needpayoff:0, closed:0, other:0};
+  let relevanceTotal = 0, relevanceCount = 0;
+  Coach.turnScores.forEach(t=>{
+    const stage = stageCounts.hasOwnProperty(t.questionType) ? t.questionType : 'other';
+    stageCounts[stage] += 1;
+    if(Number.isFinite(t.relevance)){ relevanceTotal += t.relevance; relevanceCount += 1; }
+  });
+  const areasTouched = new Set(Coach.turnScores.filter(t=>t.piece).map(t=>t.piece)).size;
+
   Leaderboard.submitScore({
     name: App.repName,
     score: data.overallScore,
     level: data.overallLevel,
     company: Coach.profile.companyName || '',
-    difficulty: Coach.profile.difficulty || ''
+    difficulty: Coach.profile.difficulty || '',
+    questionCount: Coach.messages.filter(m=>m.who==='rep').length,
+    areasTouched,
+    stageCounts,
+    avgRelevance: relevanceCount ? Math.round((relevanceTotal/relevanceCount)*10)/10 : null,
+    missedPains: data.missedPains || [],
+    improvements: data.improvements || [],
+    strengths: data.strengths || []
   });
 }
 const RAG = {

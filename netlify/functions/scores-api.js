@@ -66,6 +66,13 @@ exports.handler = async (event) => {
       level: String(payload.level || '').slice(0, 40),
       company: String(payload.company || '').slice(0, 100),
       difficulty: String(payload.difficulty || '').slice(0, 20),
+      questionCount: Number.isFinite(Number(payload.questionCount)) ? Number(payload.questionCount) : null,
+      areasTouched: Number.isFinite(Number(payload.areasTouched)) ? Number(payload.areasTouched) : null,
+      stageCounts: (payload.stageCounts && typeof payload.stageCounts === 'object') ? payload.stageCounts : null,
+      avgRelevance: Number.isFinite(Number(payload.avgRelevance)) ? Number(payload.avgRelevance) : null,
+      missedPains: Array.isArray(payload.missedPains) ? payload.missedPains.slice(0, 10).map(s => String(s).slice(0, 200)) : [],
+      improvements: Array.isArray(payload.improvements) ? payload.improvements.slice(0, 10).map(s => String(s).slice(0, 300)) : [],
+      strengths: Array.isArray(payload.strengths) ? payload.strengths.slice(0, 10).map(s => String(s).slice(0, 300)) : [],
       timestamp: new Date().toISOString()
     };
 

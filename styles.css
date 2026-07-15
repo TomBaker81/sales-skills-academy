@@ -274,6 +274,10 @@
 
   .foot{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-faint);text-align:center;}
   .hidden{display:none !important;}
+  .mgr-stat{background:var(--cream-card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-align:center;}
+  .mgr-stat-num{font-family:var(--font-head);font-size:24px;font-weight:800;color:var(--navy);}
+  .mgr-stat-label{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+  .mgr-rep-row:hover{background:#F6F3EA;}
   @media (max-width:640px){
     .piece-grid{grid-template-columns:1fr 1fr;}
     .brandrow{flex-direction:column;align-items:flex-start;}
