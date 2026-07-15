@@ -1,113 +1,306 @@
 const FALLBACK_PROFILES = [
   {
-    companyName:'The Harbour View Hotel', industry:'Boutique hotel', employees:34, difficulty:'warm',
-    description:"A family-run hotel with an on-site restaurant and a small events space, welcoming both business and leisure guests. Front desk and reservations handle a steady flow of calls and walk-ins.",
-    whatTheyCareAbout:"Guest reviews, repeat bookings, and the events space running smoothly — anything that touches the guest experience matters more than the technology behind it.",
-    persona:{name:'Aoife Byrne', role:'Owner/Founder', category:'Owner', tone:'Warm, friendly and happy to chat once she knows you\u2019re not wasting her time — a little rushed, answers in short bursts, often mid-task.'},
-    hiddenPains:[
-      {piece:'cloud-voice', severity:'high', detail:'missed reservation calls during peak hours, no call routing after the front desk shift ends'},
-      {piece:'cloud-infrastructure', severity:'medium', detail:'nightly backup runs but has never been restore-tested, unsure if it is immutable'},
-      {piece:'mobile-security', severity:'low', detail:'reception staff use personal phones for guest WhatsApp messages, no MDM in place'}
+    "companyName": "The Harbour View Hotel",
+    "industry": "Boutique hotel",
+    "employees": 34,
+    "difficulty": "warm",
+    "description": "A family-run hotel with an on-site restaurant and a small events space, welcoming both business and leisure guests. Front desk and reservations handle a steady flow of calls and walk-ins.",
+    "whatTheyCareAbout": "Guest reviews, repeat bookings, and the events space running smoothly — anything that touches the guest experience matters more than the technology behind it.",
+    "persona": {
+      "name": "Aoife Byrne",
+      "role": "Owner/Founder",
+      "category": "Owner",
+      "tone": "Warm, friendly and happy to chat once she knows you’re not wasting her time — a little rushed, answers in short bursts, often mid-task."
+    },
+    "hiddenPains": [
+      {
+        "piece": "connectivity-access",
+        "severity": "high",
+        "detail": "guest Wi-Fi and back-office systems share one internet line, and it visibly slows to a crawl during check-in rushes and full occupancy weekends"
+      },
+      {
+        "piece": "cloud-voice",
+        "severity": "medium",
+        "detail": "front desk still routes calls through an old phone system separate from the internet billing, has caused missed booking calls before"
+      },
+      {
+        "piece": "mobile-security",
+        "severity": "low",
+        "detail": "management team share a couple of unmanaged mobile phones for on-call cover"
+      }
     ],
-    openingLine:"Hi there — you've got about ten minutes, we're mid-changeover between guests. What did you want to go through?"
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Walsh & Kearney Accountants', industry:'Accountancy practice', employees:22, difficulty:'warm',
-    description:"An established accountancy practice serving local business clients, with a busy seasonal spike around tax deadlines. Staff regularly handle sensitive client financial data.",
-    whatTheyCareAbout:"Client trust and confidentiality above all — a practice's reputation lives or dies on whether clients believe their financial data is safe.",
-    persona:{name:'Conor Walsh', role:'IT Manager', category:'IT/Technical', tone:'Precise and methodical, happy to go into detail once he trusts you know what you\u2019re talking about.'},
-    hiddenPains:[
-      {piece:'cyber-assurance', severity:'high', detail:'traditional antivirus only, no EDR, had a phishing near-miss last year that nearly compromised a client mailbox'},
-      {piece:'m365', severity:'medium', detail:'on Business Standard but MFA is not enforced for all users'},
-      {piece:'secure-access-edge', severity:'medium', detail:'two office locations with inconsistent VPN setup between them'}
+    "companyName": "Walsh & Kearney Accountants",
+    "industry": "Accountancy practice",
+    "employees": 22,
+    "difficulty": "warm",
+    "description": "An established accountancy practice serving local business clients, with a busy seasonal spike around tax deadlines. Staff regularly handle sensitive client financial data.",
+    "whatTheyCareAbout": "Client trust and confidentiality above all — a practice's reputation lives or dies on whether clients believe their financial data is safe.",
+    "persona": {
+      "name": "Conor Walsh",
+      "role": "IT Manager",
+      "category": "IT/Technical",
+      "tone": "Precise and methodical, happy to go into detail once he trusts you know what you’re talking about."
+    },
+    "hiddenPains": [
+      {
+        "piece": "cyber-assurance",
+        "severity": "high",
+        "detail": "handles sensitive client financial data with no formal security governance, no named owner and no incident plan — partner is increasingly aware this is a real client-trust risk"
+      },
+      {
+        "piece": "m365",
+        "severity": "medium",
+        "detail": "on an older Microsoft licence tier, MFA not enforced consistently across all staff"
+      },
+      {
+        "piece": "secure-access-edge",
+        "severity": "medium",
+        "detail": "staff work from home some days on personal laptops with no consistent secure access policy"
+      }
     ],
-    openingLine:"Hi, thanks for the call — I've a client deadline in about twenty minutes, but go ahead, what's this about?"
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Fitzgerald Precision Engineering', industry:'Contract manufacturer', employees:85, difficulty:'brisk',
-    description:"A contract manufacturer running a single production site with handheld scanners across the shop floor, plus a small distribution operation attached. Growing steadily with a few new client contracts recently won.",
-    whatTheyCareAbout:"Keeping the production line moving and hitting delivery deadlines for clients — any downtime translates directly into missed targets and awkward calls to customers.",
-    persona:{name:'Marie Fitzgerald', role:'Operations Director (C-level)', category:'C-Level', tone:'Direct and practical, thinks in terms of production impact rather than tech jargon — businesslike, wants things to move quickly.'},
-    hiddenPains:[
-      {piece:'secure-network', severity:'high', detail:'shop-floor Wi-Fi drops weekly, halting handheld scanners on the production line'},
-      {piece:'cloud-voice', severity:'high', detail:'office and shop-floor phones still run on old ISDN lines, no plan in place for the network switch-off, worried about losing lines mid-production if it happens before they act'},
-      {piece:'connectivity-access', severity:'medium', detail:'single internet line with no failover, one outage cost roughly half a day of production'},
-      {piece:'support-services', severity:'medium', detail:'juggling three different suppliers for network, phones and backup with no single point of contact'}
+    "companyName": "Fitzgerald Precision Engineering",
+    "industry": "Contract manufacturer",
+    "employees": 85,
+    "difficulty": "brisk",
+    "description": "A contract manufacturer running a single production site with handheld scanners across the shop floor, plus a small distribution operation attached. Growing steadily with a few new client contracts recently won.",
+    "whatTheyCareAbout": "Keeping the production line moving and hitting delivery deadlines for clients — any downtime translates directly into missed targets and awkward calls to customers.",
+    "persona": {
+      "name": "Marie Fitzgerald",
+      "role": "Operations Director (C-level)",
+      "category": "C-Level",
+      "tone": "Direct and practical, thinks in terms of production impact rather than tech jargon — businesslike, wants things to move quickly."
+    },
+    "hiddenPains": [
+      {
+        "piece": "connectivity-access",
+        "severity": "high",
+        "detail": "single internet line with no failover, one outage already cost roughly half a day of production"
+      },
+      {
+        "piece": "secure-network",
+        "severity": "medium",
+        "detail": "shop-floor Wi-Fi drops weekly, occasionally halting handheld scanners on the production line"
+      },
+      {
+        "piece": "cloud-voice",
+        "severity": "medium",
+        "detail": "office and shop-floor phones still run on old ISDN lines, no plan in place for the network switch-off"
+      },
+      {
+        "piece": "support-services",
+        "severity": "medium",
+        "detail": "juggling three different suppliers for network, phones and backup with no single point of contact"
+      }
     ],
-    openingLine:"Right, go ahead — fair warning, I'm on the factory floor, so if I go quiet that's why."
+    "openingLine": "Hello?"
   },
   {
-    companyName:'O\u2019Sullivan\u2019s Home & Garden', industry:'Multi-site retailer', employees:48, difficulty:'warm',
-    description:"A family-run retail group with three stores across two counties, steadily growing and weighing up a fourth location. Store managers travel between sites regularly.",
-    whatTheyCareAbout:"Keeping tills and stock systems running during trading hours, and controlling costs carefully as the business expands to new sites.",
-    persona:{name:'Niamh O\u2019Sullivan', role:'Finance Director (C-level)', category:'C-Level', tone:'Budget-conscious and wants the business case, but friendly and willing to talk once she sees the relevance.'},
-    hiddenPains:[
-      {piece:'cloud-infrastructure', severity:'high', detail:'POS and stock data backed up locally only, no cloud copy, never restore-tested'},
-      {piece:'mobile-office', severity:'medium', detail:'area manager travels between stores on a personal mobile hotspot, no secure access'},
-      {piece:'cloud-voice', severity:'high', detail:'two of the three stores are still on old ISDN lines, aware the network switch-off is coming but has not looked into what moving to VoIP would actually involve'}
+    "companyName": "O’Sullivan’s Home & Garden",
+    "industry": "Multi-site retailer",
+    "employees": 48,
+    "difficulty": "warm",
+    "description": "A family-run retail group with three stores across two counties, steadily growing and weighing up a fourth location. Store managers travel between sites regularly.",
+    "whatTheyCareAbout": "Keeping tills and stock systems running during trading hours, and controlling costs carefully as the business expands to new sites.",
+    "persona": {
+      "name": "Niamh O’Sullivan",
+      "role": "Finance Director (C-level)",
+      "category": "C-Level",
+      "tone": "Budget-conscious and wants the business case, but friendly and willing to talk once she sees the relevance."
+    },
+    "hiddenPains": [
+      {
+        "piece": "m365",
+        "severity": "high",
+        "detail": "three stores each run their own ad-hoc file sharing and email, no proper Teams or SharePoint setup connecting them, area manager constantly chasing paperwork by phone"
+      },
+      {
+        "piece": "cloud-infrastructure",
+        "severity": "medium",
+        "detail": "each store keeps its own local till and stock records, no central cloud visibility across sites"
+      },
+      {
+        "piece": "mobile-office",
+        "severity": "medium",
+        "detail": "area manager travels between stores on a personal mobile hotspot, no secure access"
+      },
+      {
+        "piece": "cloud-voice",
+        "severity": "medium",
+        "detail": "two of the three stores are still on old ISDN lines, aware the network switch-off is coming but has not looked into what moving to VoIP would actually involve"
+      }
     ],
-    openingLine:"Hi — happy to chat, just so you know I look after the numbers more than the tech, so bear with me."
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Kelly Freight & Logistics', industry:'Freight & logistics', employees:112, difficulty:'brisk',
-    description:"An established freight and distribution business with a large fleet of drivers and warehouse staff working across multiple depots. Growth has meant more devices and more sites than a few years ago.",
-    whatTheyCareAbout:"On-time delivery and driver safety — anything that risks a missed delivery window or exposes the business to liability is what actually keeps him up at night.",
-    persona:{name:'Darragh Kelly', role:'Operations Director (C-level)', category:'C-Level', tone:'Blunt and time-pressed, wants the point made quickly, but not unfriendly about it.'},
-    hiddenPains:[
-      {piece:'mobile-security', severity:'high', detail:'over a hundred drivers and warehouse staff on a real mix of BYOD and company phones with zero management, several devices have gone missing over the years with no way to wipe them'},
-      {piece:'cyber-assurance', severity:'medium', detail:'a large customer has started asking for evidence of security governance as part of a contract renewal, and there is nothing formal to show them'},
-      {piece:'secure-access-edge', severity:'low', detail:'depot sites connect back to head office with inconsistent, informally-configured VPNs'}
+    "companyName": "Kelly Freight & Logistics",
+    "industry": "Freight & logistics",
+    "employees": 112,
+    "difficulty": "brisk",
+    "description": "An established freight and distribution business with a large fleet of drivers and warehouse staff working across multiple depots. Growth has meant more devices and more sites than a few years ago.",
+    "whatTheyCareAbout": "On-time delivery and driver safety — anything that risks a missed delivery window or exposes the business to liability is what actually keeps him up at night.",
+    "persona": {
+      "name": "Darragh Kelly",
+      "role": "Operations Director (C-level)",
+      "category": "C-Level",
+      "tone": "Blunt and time-pressed, wants the point made quickly, but not unfriendly about it."
+    },
+    "hiddenPains": [
+      {
+        "piece": "mobile-security",
+        "severity": "high",
+        "detail": "over a hundred drivers and warehouse staff on a real mix of BYOD and company phones with zero management, several devices have gone missing over the years with no way to wipe them"
+      },
+      {
+        "piece": "cyber-assurance",
+        "severity": "medium",
+        "detail": "a large customer has started asking for evidence of security governance as part of a contract renewal, and there is nothing formal to show them"
+      },
+      {
+        "piece": "secure-access-edge",
+        "severity": "low",
+        "detail": "depot sites connect back to head office with inconsistent, informally-configured VPNs"
+      }
     ],
-    openingLine:"Go on then, but make it quick — I'm between two calls with drivers this morning."
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Brennan Family Practice', industry:'Healthcare practice', employees:19, difficulty:'warm',
-    description:"A well-regarded local healthcare practice with several clinicians seeing patients daily. Handles a steady stream of sensitive patient records and appointment scheduling.",
-    whatTheyCareAbout:"Patient trust and continuity of care — anything that risks patient data or disrupts appointments directly threatens the practice's reputation in a small community.",
-    persona:{name:'Dr. Fiona Brennan', role:'Owner/Founder', category:'Owner', tone:'Warm and personable, though thoughtful about patient data — happy to talk once she understands why you\u2019re asking.'},
-    hiddenPains:[
-      {piece:'cyber-assurance', severity:'high', detail:'no one owns security governance at all, just an IT contractor who fixes things when they break, no incident response plan of any kind exists'},
-      {piece:'mobile-security', severity:'medium', detail:'clinicians use personal phones to photograph and message patient information to each other, no device management or policy in place'},
-      {piece:'cloud-voice', severity:'medium', detail:'reception still runs on an old ISDN line, hasn\u2019t looked into the switch-off timeline, worried about losing the ability to take appointment calls if it happens unexpectedly'},
-      {piece:'cloud-infrastructure', severity:'low', detail:'patient records backed up to an external drive that sits in the same room as the server'}
+    "companyName": "Brennan Family Practice",
+    "industry": "Healthcare practice",
+    "employees": 19,
+    "difficulty": "warm",
+    "description": "A well-regarded local healthcare practice with several clinicians seeing patients daily. Handles a steady stream of sensitive patient records and appointment scheduling.",
+    "whatTheyCareAbout": "Patient trust and continuity of care — anything that risks patient data or disrupts appointments directly threatens the practice's reputation in a small community.",
+    "persona": {
+      "name": "Dr. Fiona Brennan",
+      "role": "Owner/Founder",
+      "category": "Owner",
+      "tone": "Warm and personable, though thoughtful about patient data — happy to talk once she understands why you’re asking."
+    },
+    "hiddenPains": [
+      {
+        "piece": "cyber-assurance",
+        "severity": "high",
+        "detail": "no one owns security governance at all, just an IT contractor who fixes things when they break, no incident response plan of any kind exists"
+      },
+      {
+        "piece": "mobile-security",
+        "severity": "medium",
+        "detail": "clinicians use personal phones to photograph and message patient information to each other, no device management or policy in place"
+      },
+      {
+        "piece": "cloud-voice",
+        "severity": "medium",
+        "detail": "reception still runs on an old ISDN line, hasn’t looked into the switch-off timeline, worried about losing the ability to take appointment calls if it happens unexpectedly"
+      },
+      {
+        "piece": "cloud-infrastructure",
+        "severity": "low",
+        "detail": "patient records backed up to an external drive that sits in the same room as the server"
+      }
     ],
-    openingLine:"Hello — I've a few minutes between patients, so I appreciate you keeping this brief, but go ahead."
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Brogan Construction', industry:'Construction contractor', employees:64, difficulty:'dismissive',
-    description:"A mid-sized construction contractor running several active sites at once, with site managers and subcontractors coordinating constantly by phone. Deadlines and weather delays make every week unpredictable.",
-    whatTheyCareAbout:"Hitting project deadlines and keeping sites running without disputes — he's had every kind of salesperson call him and has little patience for another pitch that wastes his time.",
-    persona:{name:'Tom Brogan', role:'Owner/Founder', category:'Owner', tone:'Gruff and skeptical of sales calls, visibly impatient at first — needs a genuinely sharp, relevant question before he opens up at all. Never abusive, just hard-won.'},
-    hiddenPains:[
-      {piece:'mobile-office', severity:'high', detail:'site managers use personal phones and hotspots on-site with no secure access back to head office systems, has caused confusion over documents before'},
-      {piece:'support-services', severity:'medium', detail:'no single point of contact for IT issues, site managers waste real time chasing three different suppliers when something breaks'},
-      {piece:'cloud-infrastructure', severity:'low', detail:'project files backed up informally to a shared drive, nobody has ever tested restoring a lost project file'}
+    "companyName": "Brogan Construction",
+    "industry": "Construction contractor",
+    "employees": 64,
+    "difficulty": "dismissive",
+    "description": "A mid-sized construction contractor running several active sites at once, with site managers and subcontractors coordinating constantly by phone. Deadlines and weather delays make every week unpredictable.",
+    "whatTheyCareAbout": "Hitting project deadlines and keeping sites running without disputes — he's had every kind of salesperson call him and has little patience for another pitch that wastes his time.",
+    "persona": {
+      "name": "Tom Brogan",
+      "role": "Owner/Founder",
+      "category": "Owner",
+      "tone": "Gruff and skeptical of sales calls, visibly impatient at first — needs a genuinely sharp, relevant question before he opens up at all. Never abusive, just hard-won."
+    },
+    "hiddenPains": [
+      {
+        "piece": "mobile-security",
+        "severity": "high",
+        "detail": "field crew all carry personal Android phones for job sheets and site photos, no management or protection on any of them, one was lost on-site last month with client details on it"
+      },
+      {
+        "piece": "mobile-office",
+        "severity": "medium",
+        "detail": "site managers use personal phones and hotspots on-site with no secure access back to head office systems, has caused confusion over documents before"
+      },
+      {
+        "piece": "support-services",
+        "severity": "medium",
+        "detail": "no single point of contact for IT issues, site managers waste real time chasing three different suppliers when something breaks"
+      }
     ],
-    openingLine:"Yeah? Make it quick, I don't really do sales calls — what do you actually want?"
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Nolan Creative Agency', industry:'Marketing agency', employees:28, difficulty:'dismissive',
-    description:"A creative marketing agency serving mid-sized brand clients, juggling several campaigns at once with tight creative and delivery deadlines. Client work is entirely digital and deadline-driven.",
-    whatTheyCareAbout:"Protecting client campaign work and creative assets, and keeping the agency looking sharp and modern to clients — nothing undermines credibility faster than looking technologically behind.",
-    persona:{name:'Sinead Nolan', role:'Operations Director (C-level)', category:'C-Level', tone:'Sharp, a little dismissive at first, clearly has heard a hundred sales pitches — needs the rep to demonstrate real relevance quickly or she will end the call. Professional throughout, never rude.'},
-    hiddenPains:[
-      {piece:'m365', severity:'high', detail:'still on old individual Office licences with no central identity management, a freelancer\u2019s account was compromised last year and nobody noticed for weeks'},
-      {piece:'mobile-security', severity:'medium', detail:'creative staff use personal laptops and phones for client campaign files with no device management at all'},
-      {piece:'secure-access-edge', severity:'low', detail:'fully remote-friendly team connecting from home networks with no consistent secure access policy'}
+    "companyName": "Nolan Creative Agency",
+    "industry": "Marketing agency",
+    "employees": 28,
+    "difficulty": "dismissive",
+    "description": "A creative marketing agency serving mid-sized brand clients, juggling several campaigns at once with tight creative and delivery deadlines. Client work is entirely digital and deadline-driven.",
+    "whatTheyCareAbout": "Protecting client campaign work and creative assets, and keeping the agency looking sharp and modern to clients — nothing undermines credibility faster than looking technologically behind.",
+    "persona": {
+      "name": "Sinead Nolan",
+      "role": "Operations Director (C-level)",
+      "category": "C-Level",
+      "tone": "Sharp, a little dismissive at first, clearly has heard a hundred sales pitches — needs the rep to demonstrate real relevance quickly or she will end the call. Professional throughout, never rude."
+    },
+    "hiddenPains": [
+      {
+        "piece": "m365",
+        "severity": "high",
+        "detail": "still on old individual Office licences with no central identity management, a freelancer’s account was compromised last year and nobody noticed for weeks"
+      },
+      {
+        "piece": "mobile-security",
+        "severity": "medium",
+        "detail": "creative staff use personal laptops and phones for client campaign files with no device management at all"
+      },
+      {
+        "piece": "secure-access-edge",
+        "severity": "low",
+        "detail": "fully remote-friendly team connecting from home networks with no consistent secure access policy"
+      }
     ],
-    openingLine:"I've got about ninety seconds before my next call — what's this actually about?"
+    "openingLine": "Hello?"
   },
   {
-    companyName:'Whelan Property Services', industry:'Facilities & property maintenance', employees:56, difficulty:'warm',
-    description:"A property maintenance and facilities company with a field team of engineers and technicians visiting client sites daily across the region. Growth has meant more vans, more phones, and more sites than a couple of years ago.",
-    whatTheyCareAbout:"Keeping the field team equipped and jobs moving without wasted admin time — anything that slows down a technician getting to the next job or costs money unnecessarily is what actually bothers him.",
-    persona:{name:'Paul Whelan', role:'Operations Director (C-level)', category:'C-Level', tone:'Warm and practical, thinks in terms of keeping the vans moving rather than technology for its own sake — happy to talk once he sees the relevance to the day-to-day.'},
-    hiddenPains:[
-      {piece:'mobile-security', severity:'high', detail:'mobile contract for the whole field team is up for renewal in the next couple of months, current phones have no MDM or mobile threat defence at all, and the office laptops back at base have no EDR either — nobody has looked at protection as part of the renewal, just pricing on new handsets'},
-      {piece:'cloud-infrastructure', severity:'medium', detail:'job and client records backed up locally at the office only, never restore-tested'},
-      {piece:'support-services', severity:'low', detail:'juggling separate suppliers for mobile, office IT and backup with no single point of contact'}
+    "companyName": "Whelan Property Services",
+    "industry": "Facilities & property maintenance",
+    "employees": 56,
+    "difficulty": "warm",
+    "description": "A property maintenance and facilities company with a field team of engineers and technicians visiting client sites daily across the region. Growth has meant more vans, more phones, and more sites than a couple of years ago.",
+    "whatTheyCareAbout": "Keeping the field team equipped and jobs moving without wasted admin time — anything that slows down a technician getting to the next job or costs money unnecessarily is what actually bothers him.",
+    "persona": {
+      "name": "Paul Whelan",
+      "role": "Operations Director (C-level)",
+      "category": "C-Level",
+      "tone": "Warm and practical, thinks in terms of keeping the vans moving rather than technology for its own sake — happy to talk once he sees the relevance to the day-to-day."
+    },
+    "hiddenPains": [
+      {
+        "piece": "mobile-security",
+        "severity": "high",
+        "detail": "mobile contract for the whole field team is up for renewal in the next couple of months, current phones have no MDM or mobile threat defence at all, and the office laptops back at base have no EDR either — nobody has looked at protection as part of the renewal, just pricing on new handsets"
+      },
+      {
+        "piece": "cloud-infrastructure",
+        "severity": "medium",
+        "detail": "job and client records backed up locally at the office only, never restore-tested"
+      },
+      {
+        "piece": "support-services",
+        "severity": "low",
+        "detail": "juggling separate suppliers for mobile, office IT and backup with no single point of contact"
+      }
     ],
-    openingLine:"Hi, yeah go on — we're actually just about to start shopping around for new phones for the team, so timing's alright."
+    "openingLine": "Hello?"
   }
 ];
 
@@ -1055,6 +1248,28 @@ function speakText(text){
   utter.rate = 1.0;
   window.speechSynthesis.speak(utter);
 }
+function buildRecognizer(){
+  const r = new SpeechRecognitionCtor();
+  r.lang = 'en-IE';
+  r.interimResults = false;
+  r.maxAlternatives = 1;
+  r.onresult = (e)=>{
+    const transcript = e.results[e.results.length-1][0].transcript;
+    const input = el('#chat-input');
+    input.value = (input.value ? input.value + ' ' : '') + transcript;
+    resetInactivityTimers();
+  };
+  r.onerror = (e)=>{
+    stopListening();
+    if(e.error === 'not-allowed' || e.error === 'permission-denied' || e.error === 'service-not-allowed'){
+      addBubble('system', "Microphone access was blocked — check your browser's site permissions (usually a mic icon in the address bar) to use voice input.");
+    } else if(e.error !== 'no-speech' && e.error !== 'aborted'){
+      addBubble('system', "Voice input error (" + e.error + ") — you can still type your question.");
+    }
+  };
+  r.onend = ()=> stopListening();
+  return r;
+}
 function initVoiceFeatures(){
   if(window.speechSynthesis){
     pickGoogleVoice();
@@ -1071,45 +1286,34 @@ function initVoiceFeatures(){
   }
   if(SpeechRecognitionCtor){
     el('#btn-mic').style.display = 'inline-flex';
-    Voice.recognizer = new SpeechRecognitionCtor();
-    Voice.recognizer.lang = 'en-IE';
-    Voice.recognizer.interimResults = false;
-    Voice.recognizer.maxAlternatives = 1;
-    Voice.recognizer.onresult = (e)=>{
-      const transcript = e.results[e.results.length-1][0].transcript;
-      const input = el('#chat-input');
-      input.value = (input.value ? input.value + ' ' : '') + transcript;
-      resetInactivityTimers();
-    };
-    Voice.recognizer.onerror = (e)=>{
-      stopListening();
-      if(e.error === 'not-allowed' || e.error === 'permission-denied'){
-        addBubble('system', "Microphone access was blocked — check your browser's site permissions to use voice input.");
-      } else if(e.error !== 'no-speech' && e.error !== 'aborted'){
-        addBubble('system', "Voice input error (" + e.error + ") — you can still type your question.");
-      }
-    };
-    Voice.recognizer.onend = ()=> stopListening();
     el('#btn-mic').addEventListener('click', ()=>{
       if(Voice.recognizing) stopListening(); else startListening();
     });
   }
 }
 function startListening(){
-  if(!Voice.recognizer || Voice.recognizing) return;
+  if(!SpeechRecognitionCtor || Voice.recognizing) return;
+  // Build a fresh recognizer on every start rather than reusing one long-lived
+  // instance — the Web Speech API's internal state can get stuck after an
+  // error or an unusual end, silently breaking every future click otherwise.
+  Voice.recognizer = buildRecognizer();
   try{
     Voice.recognizer.start();
     Voice.recognizing = true;
     el('#btn-mic').classList.add('listening');
     el('#btn-mic').textContent = '⏹';
-  } catch(e){ /* already started, ignore */ }
+  } catch(e){
+    Voice.recognizing = false;
+    addBubble('system', "Couldn't start voice input (" + (e && e.message ? e.message : 'unknown error') + ") — you can still type your question.");
+  }
 }
 function stopListening(){
-  if(!Voice.recognizer) return;
   Voice.recognizing = false;
   el('#btn-mic').classList.remove('listening');
   el('#btn-mic').textContent = '🎤';
-  try{ Voice.recognizer.stop(); } catch(e){}
+  if(Voice.recognizer){
+    try{ Voice.recognizer.stop(); } catch(e){}
+  }
 }
 initVoiceFeatures();
 function addHintBubble(hint, auto){
@@ -1252,7 +1456,7 @@ async function generateProfileViaAPI(difficulty){
  "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
  "persona": {"name": string (Irish-sounding full name), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
  "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away,
- "openingLine": string, the first thing the persona says when the call starts — must not reveal any pains directly,
+ "openingLine": string, must be ONLY a short, simple way of answering an incoming phone call \u2014 like "Hello?", "Hello, [Name] speaking", or "[Company name], hello" \u2014 nothing more. Do NOT include any context, availability, tone-setting, or hint about being busy/receptive/rushed \u2014 the rep hasn't spoken yet, so the persona has no idea who's calling or why. Save all tone and personality for how they respond AFTER the rep's first message,
  "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
    - exactly 1 of type "news": a plausible, general (not fabricated specific/false) industry news angle relevant to this sector that could open a conversation, e.g. "Ransomware attacks on small hospitality businesses have been widely reported recently — worth raising as a natural opener." Keep it generic/plausible, not a specific invented headline or company,
    - exactly 2 of type "question": concrete example discovery questions the rep could ask next, each tailored towards one of the actual hidden pains above (phrased as advice, e.g. "Try asking how many mobile devices they manage and who owns them — that's often revealing here"),
@@ -1260,7 +1464,8 @@ async function generateProfileViaAPI(difficulty){
    Order them from most useful early in the call to most useful later.
 }
 ${difficultyInstructions[difficulty]}
-Roughly one in three profiles should include a cloud-voice hidden pain specifically about still running old ISDN/PSTN lines (e.g. reception, store, or site phones) with no VoIP migration plan in place ahead of the industry-wide network switch-off — make it a natural, business-specific detail (what it would cost them if those lines went down unexpectedly) rather than a generic mention, and vary the severity. The other two-thirds of profiles should use other hidden pains as normal, so this shouldn't appear on every call.
+This year's priority solution areas for retention and upsell are: mobile-security (mobile contracts, device management, threat protection), connectivity-access (broadband/DIA upgrades), cyber-assurance (security governance and monitoring), and m365 (Microsoft 365 licensing, security and compliance). At least one hidden pain in most profiles \u2014 roughly three out of every four \u2014 should come from one of these four areas, chosen naturally for the industry rather than forced. The remaining profiles, and any additional hidden pains beyond the first, can draw from any of the other focus areas for variety.
+Roughly one in three profiles should include a cloud-voice hidden pain specifically about still running old ISDN/PSTN lines (e.g. reception, store, or site phones) with no VoIP migration plan in place ahead of the industry-wide network switch-off — make it a natural, business-specific detail (what it would cost them if those lines went down unexpectedly) rather than a generic mention, and vary the severity. This is separate from, and can sit alongside, the priority-area weighting above.
 Make each profile meaningfully different from a generic example: vary the sector, size, persona and which of the focus areas are hidden pains. The focus areas are:
 ${pieceCriteriaBlock()}`;
   const text = await callAI(system, [{role:'user', content:'Generate a new, unique SME profile now.'}], 1100);
