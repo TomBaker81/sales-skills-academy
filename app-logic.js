@@ -301,6 +301,38 @@ const FALLBACK_PROFILES = [
       }
     ],
     "openingLine": "Hello?"
+  },
+  {
+    "companyName": "Dolan & Reid Solicitors",
+    "industry": "Legal practice",
+    "employees": 22,
+    "difficulty": "brisk",
+    "description": "A small legal practice handling conveyancing and family law, with fee earners who spend a lot of time on the phone with clients and out of office for meetings and court dates.",
+    "whatTheyCareAbout": "Being reachable for clients at short notice and not looking unprofessional with dropped calls or voicemail — reputation and responsiveness matter more to her than the technology itself.",
+    "persona": {
+      "name": "Grainne Dolan",
+      "role": "Owner/Founder",
+      "category": "Owner",
+      "tone": "Brisk and time-poor, but will engage properly once she sees a clear pounds-and-pence reason to listen."
+    },
+    "hiddenPains": [
+      {
+        "piece": "mobile-security",
+        "severity": "high",
+        "detail": "currently with a different mobile provider on a rolling contract she has never actually reviewed, had a bad experience with their support last year over a billing error and has been meaning to look elsewhere since, no device management or protection on any of the fee earners' phones either"
+      },
+      {
+        "piece": "cyber-assurance",
+        "severity": "medium",
+        "detail": "handles sensitive client legal files with no formal security policy or incident plan"
+      },
+      {
+        "piece": "connectivity-access",
+        "severity": "low",
+        "detail": "office broadband occasionally drops during video calls with clients"
+      }
+    ],
+    "openingLine": "Hello?"
   }
 ];
 
@@ -308,7 +340,7 @@ const PIECE_KEYWORDS = {
   'secure-network':['network','wifi','wi-fi','firewall','outage','router','vlan','segment','lan'],
   'cloud-voice':['phone','voice','call','pstn','isdn','voip','webex','collaborate','line'],
   'm365':['microsoft','365','office','teams','sharepoint','licence','license','mfa','entra','conditional access'],
-  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet','contract renewal','handset','upgrade','mtd','mobile threat','mobile threat defence','mobile threat defense','edr','endpoint detection','endpoint detection and response','device estate'],
+  'mobile-security':['mobile phone','byod','sim','device management','mdm','personal phone','how many devices','android','iphone','rugged','fleet','contract renewal','handset','upgrade','mtd','mobile threat','mobile threat defence','mobile threat defense','edr','endpoint detection','endpoint detection and response','device estate','current provider','mobile provider','switch provider','network provider','per line','sim only'],
   'cyber-assurance':['governance','vciso','incident response','business continuity','risk assessment','security leadership','tabletop','compliance','audit','competitor','differentiat','win business','customer trust','reputation','security','monitor','soc','edr','endpoint detection','endpoint detection and response','antivirus','threat','breach','incident'],
   'mobile-office':['remote work','hybrid','field staff','work from home','wfh','travel','out of office'],
   'connectivity-access':['internet','connectivity','broadband','fibre','bandwidth','site','line speed','lan','wan','lan/wan','switching','switches','wiring'],
@@ -739,6 +771,7 @@ const TRAINING_SECTIONS = [
       <tr><td>Immutable backup</td><td>Even if ransomware gets in, your data can't be encrypted along with it.</td></tr>
       <tr><td>Single point of contact</td><td>One call, one number, no more chasing three different suppliers.</td></tr>
       <tr><td>MDM enrolment</td><td>A lost phone can be wiped in minutes, not left as an open door.</td></tr>
+      <tr><td>Matching or beating a competitor's mobile pricing</td><td>Same or better phones and contract, without the hassle you've had with your current provider.</td></tr>
       <tr><td>VoIP migration ahead of the ISDN/PSTN switch-off</td><td>You move on your own timeline, keeping your numbers and features intact — instead of scrambling once the old lines go dead.</td></tr>
     </table>
     <h4>If they ask about price early</h4>
@@ -1600,7 +1633,7 @@ async function generateProfileViaAPI(difficulty){
    Order them from most useful early in the call to most useful later.
 }
 ${difficultyInstructions[difficulty]}
-This year's priority solution areas for retention and upsell are: mobile-security (mobile contracts, device management, threat protection), connectivity-access (broadband/DIA upgrades), cyber-assurance (security governance and monitoring), and m365 (Microsoft 365 licensing, security and compliance). At least one hidden pain in most profiles \u2014 roughly three out of every four \u2014 should come from one of these four areas, chosen naturally for the industry rather than forced. The remaining profiles, and any additional hidden pains beyond the first, can draw from any of the other focus areas for variety.
+This year's priority solution areas for retention and upsell are: mobile-security (selling and upgrading mobile phones and mobile contracts themselves, not just device security \u2014 include a mix of businesses already with us due a handset/contract refresh, and businesses currently with a different, competing mobile provider who are unhappy or unsure of their contract terms, a classic switch/displacement opportunity; device management and threat protection are the natural upsell once the phones and contract conversation is underway, not the opening pitch), connectivity-access (broadband/DIA upgrades), cyber-assurance (security governance and monitoring), and m365 (Microsoft 365 licensing, security and compliance). At least one hidden pain in most profiles \u2014 roughly three out of every four \u2014 should come from one of these four areas, chosen naturally for the industry rather than forced. The remaining profiles, and any additional hidden pains beyond the first, can draw from any of the other focus areas for variety.
 Roughly one in three profiles should include a cloud-voice hidden pain specifically about still running old ISDN/PSTN lines (e.g. reception, store, or site phones) with no VoIP migration plan in place ahead of the industry-wide network switch-off — make it a natural, business-specific detail (what it would cost them if those lines went down unexpectedly) rather than a generic mention, and vary the severity. This is separate from, and can sit alongside, the priority-area weighting above.
 Make each profile meaningfully different from a generic example: vary the sector, size, persona and which of the focus areas are hidden pains. The focus areas are:
 ${pieceCriteriaBlock()}`;
