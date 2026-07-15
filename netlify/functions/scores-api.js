@@ -20,7 +20,7 @@ exports.handler = async (event) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -29,7 +29,7 @@ exports.handler = async (event) => {
 
   let store;
   try {
-    store = getStore('leaderboard');
+    store = getStore({ name: 'leaderboard', consistency: 'strong' });
   } catch (err) {
     return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Blob store unavailable: ' + err.message }) };
   }
@@ -78,6 +78,25 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, entry }) };
     } catch (err) {
       return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Failed to save score: ' + err.message }) };
+    }
+  }
+
+  if (event.httpMethod === 'DELETE') {
+    // Removes entries matching an exact name — deliberately scoped to one
+    // person's entries rather than a full-table wipe, so a shared public
+    // endpoint can't accidentally (or maliciously) clear everyone's scores.
+    const params = event.queryStringParameters || {};
+    const name = String(params.name || '').trim();
+    if (!name) {
+      return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'name query parameter is required' }) };
+    }
+    try {
+      const existing = (await store.get('entries', { type: 'json' })) || [];
+      const remaining = existing.filter(e => e.name !== name);
+      await store.setJSON('entries', remaining);
+      return { statusCode: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, removed: existing.length - remaining.length }) };
+    } catch (err) {
+      return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Failed to delete entries: ' + err.message }) };
     }
   }
 
