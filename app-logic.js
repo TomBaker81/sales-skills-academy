@@ -1271,6 +1271,16 @@ function renderPrimer(){
       <p>${esc(p.overview)}</p>
       <h4>Why it matters to SMEs</h4>
       <p>${esc(p.whyItMatters)}</p>
+      ${p.tiers ? `
+      <h4>Our Cyber Assurance tiers</h4>
+      <p>${esc(p.tiers.intro)}</p>
+      <div class="primer-tiers">
+        ${p.tiers.items.map(t=>`
+        <div class="tier-item">
+          <div class="tier-name">${esc(t.name)}</div>
+          <div class="tier-detail">${esc(t.detail)}</div>
+        </div>`).join('')}
+      </div>` : ''}
       <div class="primer-grid">
         <div>
           <h4>Key indicators to listen for</h4>

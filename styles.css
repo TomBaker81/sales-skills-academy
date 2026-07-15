@@ -170,6 +170,10 @@
   .reg-links a{font-size:13px;color:var(--teal-deep);font-weight:600;text-decoration:none;}
   .reg-links a:hover{text-decoration:underline;}
   .reg-note{background:var(--cream-card);border:1px dashed var(--line);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--ink-soft);margin:8px 0;}
+  .primer-tiers{display:flex;flex-direction:column;gap:10px;margin:10px 0 4px;}
+  .tier-item{background:#fff;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 14px;}
+  .tier-name{font-weight:800;font-size:13.5px;color:var(--navy);margin-bottom:5px;}
+  .tier-detail{font-size:13.5px;line-height:1.55;color:var(--ink-soft);}
   .qtype-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
   .qtype-badge{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:4px 10px;border-radius:99px;color:#fff;}
   .qtype-badge.situation{background:var(--teal-deep);}
