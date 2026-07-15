@@ -599,12 +599,27 @@ function setView(name){
   if(name==='training') renderTraining();
   if(name==='leaderboard') renderLeaderboard();
   if(name==='manager') initManagerView();
+  if(name==='qual'){
+    if(App.qual.pieceId){
+      el('#qual-picker').classList.add('hidden');
+      el('#qual-wrap').classList.remove('hidden');
+    } else {
+      el('#qual-picker').classList.remove('hidden');
+      el('#qual-wrap').classList.add('hidden');
+      renderQualPicker();
+    }
+  }
   window.scrollTo({top:0, behavior:'smooth'});
 }
 els('.tab-btn').forEach(b=> b.addEventListener('click', ()=> setView(b.dataset.view)));
 el('#btn-goto-coach').addEventListener('click', ()=> setView('coach'));
 el('#btn-goto-training').addEventListener('click', ()=> setView('training'));
-el('#btn-qual-back').addEventListener('click', ()=> setView('home'));
+el('#btn-qual-back').addEventListener('click', ()=>{
+  App.qual.pieceId = null;
+  el('#qual-wrap').classList.add('hidden');
+  el('#qual-picker').classList.remove('hidden');
+  renderQualPicker();
+});
 
 /* =========================================================================
    SALES TRAINING CONTENT
@@ -1174,8 +1189,24 @@ function startPiece(pieceId){
   App.qual.nodeId = 'start';
   App.qual.notes = [];
   setView('qual');
+  el('#qual-picker').classList.add('hidden');
+  el('#qual-wrap').classList.remove('hidden');
   renderQualHeader();
   renderQualNode();
+}
+function renderQualPicker(){
+  const grid = el('#qual-picker-grid');
+  grid.innerHTML = PIECES.map(p=>{
+    const best = bestLevelForPiece(p.id);
+    const badge = best ? `<span class="pc-status" style="background:${LEVELS[best.level].bg};color:${LEVELS[best.level].color};">${LEVELS[best.level].label}</span>` : '';
+    return `<button class="piece-card" style="--accent:${p.color}" data-id="${p.id}">
+      <div class="pc-icon">${p.icon}</div>
+      <h3>${esc(p.name)}</h3>
+      <p>${esc(p.blurb)}</p>
+      ${badge}
+    </button>`;
+  }).join('');
+  els('#qual-picker-grid .piece-card').forEach(c=> c.addEventListener('click', ()=> startPiece(c.dataset.id)));
 }
 function renderQualHeader(){
   const piece = PIECE_BY_ID[App.qual.pieceId];
@@ -1767,8 +1798,21 @@ el('#btn-end-scenario').addEventListener('click', ()=> endScenario());
 /* =========================================================================
    AI CALLS (routed through the unified callAI dispatcher)
    ========================================================================= */
+const SME_SECTOR_POOL = [
+  "Boutique hotel", "Bed & breakfast group", "Wedding & events venue", "Accountancy practice", "Solicitors\u2019 practice",
+  "Architecture practice", "Engineering consultancy", "Contract manufacturer", "Precision engineering firm", "Food & beverage producer",
+  "Bakery chain", "Brewery/distillery", "Multi-site retailer", "Independent pharmacy group", "Furniture retailer",
+  "Garden centre", "Freight & logistics operator", "Vehicle fleet/haulage firm", "Warehousing & distribution", "Healthcare practice (GP/dental)",
+  "Physiotherapy clinic group", "Veterinary practice", "Childcare/creche group", "Private school", "Construction contractor",
+  "Electrical contractor", "Plumbing & heating firm", "Property maintenance company", "Estate agency", "Property management firm",
+  "Marketing/creative agency", "Recruitment agency", "IT services reseller", "Insurance broker", "Financial advisory firm",
+  "Craft/manufacturing co-op", "Textile manufacturer", "Print & signage company", "Fitness studio chain", "Golf/leisure club",
+  "Car dealership group", "Motor repair/garage chain", "Agricultural machinery dealer", "Dairy/agri-food producer", "Fishing/seafood processor",
+  "Waste management firm", "Facilities management company", "Security services firm", "Catering company", "Event management firm"
+];
 async function generateProfileViaAPI(difficulty){
   difficulty = difficulty || 'warm';
+  const suggestedSector = SME_SECTOR_POOL[Math.floor(Math.random()*SME_SECTOR_POOL.length)];
   const difficultyInstructions = {
     warm: "This persona should be WARM: friendly, approachable, reasonably forthcoming once they trust the rep isn't wasting their time. Most calls should be like this — the point is to build a junior rep's confidence, not test them.",
     brisk: "This persona should be BRISK: businesslike, a little short on time, not unfriendly but won't hand things over easily — the rep needs to ask a genuinely relevant question before getting real detail, rather than everything opening up on the first ask.",
@@ -1776,12 +1820,12 @@ async function generateProfileViaAPI(difficulty){
   };
   const system = `You generate realistic Irish SME customer profiles for a sales-training simulator used by junior SME sales reps. The rep should still have to discover the specific pains themselves through good questioning — but the industry and company description should give enough real-world texture that an attentive rep can reasonably anticipate what KIND of technology areas are likely relevant for a business like this, the way a competent rep would going into any real call. Respond with ONLY a valid JSON object, no markdown fences, no commentary, matching exactly this schema:
 {
- "companyName": string (a plausible, entirely fictional Irish SME business name fitting the sector, e.g. "The Harbour View Hotel", "Kelly Manufacturing Ltd", "Brennan & Associates" — must not resemble or reference any real company),
- "industry": string (a specific SME sub-sector, not just a broad category — e.g. "Boutique hotel", "Accountancy practice", "Contract manufacturer", "Multi-site retailer", "Freight & logistics", "Healthcare practice", "Construction contractor" — specific enough that its typical technology needs are inferable, e.g. a hotel implies guest Wi-Fi and hospitality security, a logistics firm implies mobile/field devices),
+ "companyName": string (a plausible, entirely fictional Irish SME business name fitting the sector — vary the naming style and surnames used across calls, don't default to the same handful of common Irish surnames every time — must not resemble or reference any real company),
+ "industry": string (a specific SME sub-sector, not just a broad category — specific enough that its typical technology needs are inferable, e.g. a hotel implies guest Wi-Fi and hospitality security, a logistics firm implies mobile/field devices). Use this as today's suggested sector unless you have a clearly better, different idea: "${suggestedSector}" — either way, actively avoid defaulting to hospitality, accountancy, or freight/logistics just because they're common training examples; genuine variety across calls matters more than any single suggestion,
  "employees": number (between 8 and 220, used internally for realism — shown to the rep only as a vague size band, never the exact figure),
  "description": string (two short sentences giving real operational texture — number of sites, type of customers, general shape of day-to-day operations — enough to reasonably suggest relevant technology needs, e.g. multiple sites implies inter-site connectivity, guest-facing implies guest Wi-Fi and physical security, a mobile workforce implies device management. Do NOT state any of the specific hidden pains directly or name specific systems/vendors),
  "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
- "persona": {"name": string (Irish-sounding full name), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
+ "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
  "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away,
  "openingLine": string, must be ONLY a short, simple way of answering an incoming phone call \u2014 like "Hello?", "Hello, [Name] speaking", or "[Company name], hello" \u2014 nothing more. Do NOT include any context, availability, tone-setting, or hint about being busy/receptive/rushed \u2014 the rep hasn't spoken yet, so the persona has no idea who's calling or why. Save all tone and personality for how they respond AFTER the rep's first message,
  "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
