@@ -408,7 +408,27 @@ loadSettings();
 /* =========================================================================
    APP STATE
    ========================================================================= */
-const App = { view:'home', qual:{ pieceId:null, nodeId:'start', notes:[] }, sessionLog:[], repName:'' };
+const App = { view:'home', qual:{ pieceId:null, nodeId:'start', notes:[], gatePassed:false, revealedOption:null }, sessionLog:[], repName:'' };
+
+// Generic distractor questions for the "which question would you ask" gate —
+// these represent poor discovery technique in the abstract (closed/leading,
+// jumping straight to a pitch, too vague, or off-topic) so the same small
+// bank works for every focus area and every stage, rather than needing
+// hundreds of bespoke wrong answers written per node.
+const DISTRACTOR_QUESTIONS = [
+  { text:"Everything's working fine, yeah?", note:"That's a closed, leading question — easy for them to just say \u201cyeah\u201d and the conversation stalls right there." },
+  { text:"You don't have any issues with that, do you?", note:"Closed and leading again — it invites a one-word answer instead of a real one." },
+  { text:"We've actually got a great deal on that right now, want to hear about it?", note:"That jumps straight into pitching before you've found out whether they even have the problem yet." },
+  { text:"Can I run you through what we offer?", note:"Same issue — leading with the pitch skips discovery entirely, so you'll be positioning a solution to a problem you haven't confirmed." },
+  { text:"So, how's business been generally?", note:"Too vague to surface anything specific — a strong discovery question should point at a real, findable pain, not just open small talk." },
+  { text:"Anything else going on at the moment?", note:"That's a bit too open and unfocused — it doesn't point the conversation anywhere in particular." },
+  { text:"Nice weather we've been having, isn't it?", note:"That's just small talk — fine as an icebreaker, but it won't move a discovery call forward." },
+  { text:"Are you the right person to speak to about this?", note:"Worth knowing eventually, but it's not a discovery question — it doesn't explore their situation at all." }
+];
+function pickDistractors(n){
+  const shuffled = DISTRACTOR_QUESTIONS.slice().sort(()=> Math.random()-0.5);
+  return shuffled.slice(0, n);
+}
 
 /* ---------- Leaderboard: shared score tracking across everyone using this tool ----------
    Backed by netlify/functions/scores-api.js, which stores entries in Netlify
@@ -1224,6 +1244,8 @@ function startPiece(pieceId){
   App.qual.pieceId = pieceId;
   App.qual.nodeId = 'start';
   App.qual.notes = [];
+  App.qual.gatePassed = false;
+  App.qual.revealedOption = null;
   setView('qual');
   el('#qual-picker').classList.add('hidden');
   el('#qual-wrap').classList.remove('hidden');
@@ -1305,33 +1327,94 @@ function renderQualNode(){
         </div>
       </div>`;
     logResult(App.qual.pieceId, node.level);
-    el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; renderQualNode(); });
+    el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; App.qual.gatePassed=false; App.qual.revealedOption=null; renderQualNode(); });
     el('#btn-next-piece').addEventListener('click', ()=>{
       const idx = PIECE_IDS.indexOf(App.qual.pieceId);
       startPiece(PIECE_IDS[(idx+1) % PIECE_IDS.length]);
     });
     el('#btn-done-piece').addEventListener('click', ()=> setView('home'));
-  } else {
+  } else if(node.type === 'choice'){
+    // "Choice" nodes (ask one more follow-up vs move on) are already a genuine
+    // rep decision, not a customer-answer pick — left exactly as before.
     const stepIdx = currentStepIndex(node);
     renderStepper(stepIdx);
-    const badgeClass = node.type==='choice' ? node.stage : node.type;
-    const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
-    const badgeLabel = node.type==='choice' ? 'Your Call' : (badgeLabels[node.type] || '');
     body.innerHTML = `
       <div class="qcard">
-        <div class="qtype-row"><span class="qtype-badge ${badgeClass}">${badgeLabel}</span></div>
+        <div class="qtype-row"><span class="qtype-badge ${node.stage}">Your Call</span></div>
         <h3>${esc(node.q)}</h3>
         <div class="opt-list">
-          ${node.options.map((o,i)=>`<button class="opt-btn" data-next="${o.next}" data-optidx="${i}"><span>${esc(o.label)}</span><span class="arrow">→</span></button>`).join('')}
+          ${node.options.map((o,i)=>`<button class="opt-btn" data-optidx="${i}"><span>${esc(o.label)}</span><span class="arrow">→</span></button>`).join('')}
         </div>
       </div>`;
     els('.opt-btn').forEach(b=> b.addEventListener('click', ()=>{
       const optIdx = Number(b.dataset.optidx);
       const chosen = node.options[optIdx];
       if(chosen.note) App.qual.notes.push(chosen.note);
-      App.qual.nodeId = b.dataset.next;
+      App.qual.nodeId = chosen.next;
+      App.qual.gatePassed = false; App.qual.revealedOption = null;
       renderQualNode();
     }));
+  } else {
+    // Situation / Problem / Implication / Need-payoff nodes: the rep's real
+    // job here is choosing what to ASK, not picking what the customer says —
+    // so first they pick the right question from a small set (one genuine
+    // discovery question plus generic poor-technique distractors), and only
+    // once they've picked well does the customer's actual answer get
+    // revealed (chosen at random from this node's possible answers, so the
+    // same piece plays out a little differently each time).
+    const stepIdx = currentStepIndex(node);
+    renderStepper(stepIdx);
+    const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
+    const badgeLabel = badgeLabels[node.type] || '';
+
+    if(!App.qual.gatePassed){
+      if(!App.qual._gateChoices || App.qual._gateChoices.nodeId !== App.qual.nodeId){
+        const distractors = pickDistractors(3).map(d=>({text:d.text, note:d.note, correct:false}));
+        const correctChoice = {text:node.q, note:null, correct:true};
+        const all = [...distractors, correctChoice].sort(()=> Math.random()-0.5);
+        App.qual._gateChoices = { nodeId: App.qual.nodeId, choices: all };
+      }
+      const choices = App.qual._gateChoices.choices;
+      body.innerHTML = `
+        <div class="qcard">
+          <div class="qtype-row"><span class="qtype-badge ${node.type}">${badgeLabel}</span></div>
+          <h3>What would you ask here?</h3>
+          <div class="opt-list">
+            ${choices.map((c,i)=>`<button class="opt-btn gate-opt-btn" data-idx="${i}"><span>"${esc(c.text)}"</span><span class="arrow">→</span></button>`).join('')}
+          </div>
+          <div id="gate-feedback"></div>
+        </div>`;
+      els('.gate-opt-btn').forEach(b=> b.addEventListener('click', ()=>{
+        const idx = Number(b.dataset.idx);
+        const picked = choices[idx];
+        if(picked.correct){
+          App.qual.gatePassed = true;
+          const opts = node.options;
+          App.qual.revealedOption = opts[Math.floor(Math.random()*opts.length)];
+          renderQualNode();
+        } else {
+          el('#gate-feedback').innerHTML = `<div class="gate-hint">${esc(picked.note)} Try picking a different question.</div>`;
+        }
+      }));
+    } else {
+      const revealed = App.qual.revealedOption;
+      body.innerHTML = `
+        <div class="qcard">
+          <div class="qtype-row"><span class="qtype-badge ${node.type}">${badgeLabel}</span></div>
+          <h3>${esc(node.q)}</h3>
+          <div class="customer-answer">
+            <span class="ca-label">Customer says</span>
+            <p>${esc(revealed.label)}</p>
+          </div>
+          <button class="btn btn-primary" id="btn-gate-continue">Continue →</button>
+        </div>`;
+      el('#btn-gate-continue').addEventListener('click', ()=>{
+        if(revealed.note) App.qual.notes.push(revealed.note);
+        App.qual.nodeId = revealed.next;
+        App.qual.gatePassed = false; App.qual.revealedOption = null;
+        renderQualNode();
+      });
+    }
   }
 }
 function logResult(pieceId, level){ App.sessionLog.push({pieceId, level, ts:Date.now()}); }
