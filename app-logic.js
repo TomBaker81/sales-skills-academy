@@ -539,7 +539,7 @@ async function callGemini(system, messages, maxTokens){
   // these structured-output calls (we don't need chain-of-thought here), and
   // padding the token budget is a second safety margin for models/params
   // that don't fully honor thinkingBudget.
-  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:Math.max(maxTokens, 2048), thinkingConfig:{thinkingBudget:0}} };
+  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:Math.max(maxTokens, 3072), thinkingConfig:{thinkingBudget:0}} };
 
   // Google's Gemini API does not send CORS headers on generateContent, so it
   // can't be called directly from a browser on any domain. The Netlify
@@ -1432,7 +1432,7 @@ async function newScenario(){
     profile = pickFallbackProfile(difficulty);
   } else {
     try{ profile = await generateProfileViaAPI(difficulty); }
-    catch(err){ mode='offline'; profile = pickFallbackProfile(difficulty); }
+    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickFallbackProfile(difficulty); }
   }
   Coach.profile = profile; Coach.mode = mode;
   setModeBadge(mode);
@@ -1446,8 +1446,12 @@ async function newScenario(){
   renderAreaRows();
   el('#chat-scroll').innerHTML = '<div class="chat-empty" id="chat-empty">Open with a broad Situation question about one of the focus areas.</div>';
   addBubble('customer', profile.openingLine, profile.persona.name);
-  if(mode==='offline' && !Settings.apiKey){
-    addBubble('system', 'No AI provider configured — running in Offline Practice Mode. Add a key in Settings for a live AI customer.');
+  if(mode==='offline'){
+    if(!Settings.apiKey){
+      addBubble('system', 'No AI provider configured — running in Offline Practice Mode. Add a key in Settings for a live AI customer.');
+    } else {
+      addBubble('system', "Couldn't reach the AI provider for this scenario — running in Offline Practice Mode instead. Check Settings, or just try Generate New Scenario again.");
+    }
   }
 
   el('#chat-input').disabled = false;
@@ -1791,7 +1795,7 @@ This year's priority solution areas for retention and upsell are: mobile-securit
 Roughly one in three profiles should include a cloud-voice hidden pain specifically about still running old ISDN/PSTN lines (e.g. reception, store, or site phones) with no VoIP migration plan in place ahead of the industry-wide network switch-off — make it a natural, business-specific detail (what it would cost them if those lines went down unexpectedly) rather than a generic mention, and vary the severity. This is separate from, and can sit alongside, the priority-area weighting above.
 Make each profile meaningfully different from a generic example: vary the sector, size, persona and which of the focus areas are hidden pains. The focus areas are:
 ${pieceCriteriaBlock()}`;
-  const text = await callAI(system, [{role:'user', content:'Generate a new, unique SME profile now.'}], 1100);
+  const text = await callAI(system, [{role:'user', content:'Generate a new, unique SME profile now.'}], 2200);
   const data = extractJSON(text);
   if(!data.persona || !data.hiddenPains) throw new Error('Malformed profile');
   data.difficulty = difficulty;
@@ -1956,7 +1960,7 @@ async function endScenario(){
   addBubble('system', "Ending call — scoring your conversation…");
   let data;
   try{ data = Coach.mode==='ai' ? await finalScoringViaAPI() : localFinalScoring(); }
-  catch(err){ data = localFinalScoring(); }
+  catch(err){ console.error('finalScoringViaAPI failed, falling back to offline scoring:', err); data = localFinalScoring(); }
   renderScorecard(data); openModal();
 
   // Aggregate per-turn SPIN-stage stats (situation/problem/implication/needpayoff/
