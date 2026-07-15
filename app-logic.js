@@ -430,6 +430,46 @@ function pickDistractors(n){
   return shuffled.slice(0, n);
 }
 
+/* ---------- Industry / contact propensity model ----------
+   A rep-facing, simplified model of which focus areas typically come up most
+   for a given industry and contact role — built from general SME sales
+   patterns (hospitality cares about connectivity/guest Wi-Fi and phones,
+   logistics cares about mobile/field devices, professional services cares
+   about security/compliance, and so on), not verified market research. Used
+   to bias scenario generation when a rep picks a specific industry/contact
+   instead of leaving it random — this is a training heuristic to practice
+   propensity-led selling, not a claim about any real company's data. */
+const INDUSTRY_OPTIONS = [
+  'Hospitality (hotel, B&B, venue)', 'Professional services (legal, accountancy)', 'Healthcare practice',
+  'Retail (multi-site)', 'Manufacturing', 'Construction & trades', 'Logistics & transport',
+  'Creative / marketing agency', 'Property & facilities', 'Food & beverage'
+];
+const CONTACT_ROLE_OPTIONS = ['Owner/Founder', 'IT Manager', 'Office Manager', 'Finance Director (C-level)', 'Operations Director (C-level)'];
+const INDUSTRY_TOP_AREAS = {
+  'Hospitality (hotel, B&B, venue)': ['connectivity-access','cloud-voice','secure-network'],
+  'Professional services (legal, accountancy)': ['cyber-assurance','m365','secure-access-edge'],
+  'Healthcare practice': ['cyber-assurance','m365','mobile-security'],
+  'Retail (multi-site)': ['connectivity-access','mobile-security','m365'],
+  'Manufacturing': ['connectivity-access','secure-network','support-services'],
+  'Construction & trades': ['mobile-security','mobile-office','support-services'],
+  'Logistics & transport': ['mobile-security','cyber-assurance','secure-access-edge'],
+  'Creative / marketing agency': ['m365','mobile-office','secure-access-edge'],
+  'Property & facilities': ['mobile-security','cloud-infrastructure','support-services'],
+  'Food & beverage': ['connectivity-access','cloud-voice','support-services']
+};
+const ROLE_TOP_AREAS = {
+  'IT Manager': ['m365','cyber-assurance','secure-network'],
+  'Finance Director (C-level)': ['cyber-assurance','connectivity-access','cloud-infrastructure'],
+  'Operations Director (C-level)': ['mobile-security','mobile-office','support-services'],
+  'Office Manager': ['m365','support-services','connectivity-access'],
+  'Owner/Founder': ['mobile-security','connectivity-access','cyber-assurance']
+};
+function propensityAreasFor(industry, role){
+  const fromIndustry = INDUSTRY_TOP_AREAS[industry] || [];
+  const fromRole = ROLE_TOP_AREAS[role] || [];
+  return Array.from(new Set([...fromIndustry, ...fromRole]));
+}
+
 /* ---------- Leaderboard: shared score tracking across everyone using this tool ----------
    Backed by netlify/functions/scores-api.js, which stores entries in Netlify
    Blobs (site-wide, shared storage — not per-browser like localStorage). A
@@ -1393,6 +1433,10 @@ function renderQualNode(){
     const notesHtml = App.qual.notes.length ? `
         <h4>Additional context you gathered</h4>
         <ul>${App.qual.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>` : '';
+    const pivotHtml = node.level === 'none' ? `
+        <div class="pivot-callout">
+          <strong>No pain here — this is exactly when to cross-sell.</strong> A real call rarely ends just because one area's a dead end. Broad, open Situation and Problem questions (rather than ones that only fit this focus area) are what let you naturally pivot into a different one instead of ending the call. Try a different focus area now, as if this were the same conversation continuing.
+        </div>` : '';
     body.innerHTML = `
       <div class="result-card" style="background:${lv.bg};border-color:${lv.color}44;">
         <span class="result-badge" style="background:${lv.color};color:#fff;">${lv.label}</span>
@@ -1404,18 +1448,28 @@ function renderQualNode(){
         ${notesHtml}
         <div class="nextstep-box">➜ ${esc(node.next)}</div>
         ${node.closeGuidance ? `<div class="needpayoff-box"><span class="np-label">How to close from here</span>${esc(node.closeGuidance)}</div>` : ''}
+        ${pivotHtml}
         <div class="result-actions">
           <button class="btn btn-primary" id="btn-retry-piece">Try Different Answers</button>
-          <button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>
+          ${node.level === 'none' ? `<button class="btn btn-primary" id="btn-pivot-piece">🔄 Cross-Sell: Pick a Different Focus Area</button>` : `<button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>`}
           <button class="btn btn-ghost" id="btn-done-piece">Back to All Pieces</button>
         </div>
       </div>`;
     logResult(App.qual.pieceId, node.level);
     el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; App.qual.gatePassed=false; App.qual.revealedOption=null; renderQualNode(); });
-    el('#btn-next-piece').addEventListener('click', ()=>{
-      const idx = PIECE_IDS.indexOf(App.qual.pieceId);
-      startPiece(PIECE_IDS[(idx+1) % PIECE_IDS.length]);
-    });
+    if(node.level === 'none'){
+      el('#btn-pivot-piece').addEventListener('click', ()=>{
+        App.qual.pieceId = null;
+        el('#qual-wrap').classList.add('hidden');
+        el('#qual-picker').classList.remove('hidden');
+        renderQualPicker();
+      });
+    } else {
+      el('#btn-next-piece').addEventListener('click', ()=>{
+        const idx = PIECE_IDS.indexOf(App.qual.pieceId);
+        startPiece(PIECE_IDS[(idx+1) % PIECE_IDS.length]);
+      });
+    }
     el('#btn-done-piece').addEventListener('click', ()=> setView('home'));
   } else if(node.type === 'choice'){
     // "Choice" nodes (ask one more follow-up vs move on) are already a genuine
@@ -1633,10 +1687,28 @@ function pickDifficulty(){
   if(r < 0.90) return 'brisk';      // some calls: businesslike, a bit short, has to be earned
   return 'dismissive';              // occasional: genuinely tough opener, skeptical, has to be worked for
 }
-function pickFallbackProfile(difficulty){
+function pickFallbackProfile(difficulty, industry, role){
   const matching = FALLBACK_PROFILES.filter(p => (p.difficulty||'warm') === difficulty);
   const pool = matching.length ? matching : FALLBACK_PROFILES;
-  const profile = JSON.parse(JSON.stringify(pool[Math.floor(Math.random()*pool.length)]));
+  let chosen;
+  if(industry || role){
+    // Weighted pick: profiles whose hidden pains overlap with the propensity
+    // areas for this industry/role are more likely to be chosen, without
+    // making it deterministic — this is a fallback-only approximation since
+    // these 10 fixed profiles don't cover every industry exactly.
+    const areas = propensityAreasFor(industry, role);
+    const weights = pool.map(p => {
+      const overlap = p.hiddenPains.filter(hp => areas.includes(hp.piece)).length;
+      return 1 + overlap * 3; // each matching pain triples that profile's odds
+    });
+    const total = weights.reduce((a,b)=>a+b,0);
+    let r = Math.random() * total;
+    for(let i=0;i<pool.length;i++){ r -= weights[i]; if(r<=0){ chosen = pool[i]; break; } }
+    if(!chosen) chosen = pool[pool.length-1];
+  } else {
+    chosen = pool[Math.floor(Math.random()*pool.length)];
+  }
+  const profile = JSON.parse(JSON.stringify(chosen));
   if(!Array.isArray(profile.hints) || !profile.hints.length) profile.hints = genericHints(profile);
   return profile;
 }
@@ -1662,13 +1734,15 @@ async function newScenario(){
   if(window.speechSynthesis) window.speechSynthesis.cancel();
 
   const difficulty = pickDifficulty();
+  const selectedIndustry = el('#scenario-industry-select').value || null;
+  const selectedRole = el('#scenario-role-select').value || null;
   let profile = null, mode = 'ai';
   if(!Settings.apiKey){
     mode = 'offline';
-    profile = pickFallbackProfile(difficulty);
+    profile = pickFallbackProfile(difficulty, selectedIndustry, selectedRole);
   } else {
-    try{ profile = await generateProfileViaAPI(difficulty); }
-    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickFallbackProfile(difficulty); }
+    try{ profile = await generateProfileViaAPI(difficulty, selectedIndustry, selectedRole); }
+    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickFallbackProfile(difficulty, selectedIndustry, selectedRole); }
   }
   Coach.profile = profile; Coach.mode = mode;
   updateVoiceForCurrentPersona();
@@ -1909,6 +1983,13 @@ function stopListening(){
 }
 initVoiceFeatures();
 Leaderboard.init();
+function populateScenarioSelectors(){
+  const indSel = el('#scenario-industry-select');
+  const roleSel = el('#scenario-role-select');
+  INDUSTRY_OPTIONS.forEach(ind => { indSel.innerHTML += `<option value="${esc(ind)}">${esc(ind)}</option>`; });
+  CONTACT_ROLE_OPTIONS.forEach(r => { roleSel.innerHTML += `<option value="${esc(r)}">${esc(r)}</option>`; });
+}
+populateScenarioSelectors();
 function addHintBubble(hint, auto){
   const empty = el('#chat-empty'); if(empty) empty.remove();
   const scroll = el('#chat-scroll');
@@ -2063,9 +2144,10 @@ const SME_SECTOR_POOL = [
   "Car dealership group", "Motor repair/garage chain", "Agricultural machinery dealer", "Dairy/agri-food producer", "Fishing/seafood processor",
   "Waste management firm", "Facilities management company", "Security services firm", "Catering company", "Event management firm"
 ];
-async function generateProfileViaAPI(difficulty){
+async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole){
   difficulty = difficulty || 'warm';
-  const suggestedSector = SME_SECTOR_POOL[Math.floor(Math.random()*SME_SECTOR_POOL.length)];
+  const suggestedSector = selectedIndustry || SME_SECTOR_POOL[Math.floor(Math.random()*SME_SECTOR_POOL.length)];
+  const propensityAreas = (selectedIndustry || selectedRole) ? propensityAreasFor(selectedIndustry, selectedRole) : null;
   const difficultyInstructions = {
     warm: "This persona should be WARM: friendly, approachable, reasonably forthcoming once they trust the rep isn't wasting their time. Most calls should be like this — the point is to build a junior rep's confidence, not test them.",
     brisk: "This persona should be BRISK: businesslike, a little short on time, not unfriendly but won't hand things over easily — the rep needs to ask a genuinely relevant question before getting real detail, rather than everything opening up on the first ask.",
@@ -2074,12 +2156,12 @@ async function generateProfileViaAPI(difficulty){
   const system = `You generate realistic Irish SME customer profiles for a sales-training simulator used by junior SME sales reps. The rep should still have to discover the specific pains themselves through good questioning — but the industry and company description should give enough real-world texture that an attentive rep can reasonably anticipate what KIND of technology areas are likely relevant for a business like this, the way a competent rep would going into any real call. Respond with ONLY a valid JSON object, no markdown fences, no commentary, matching exactly this schema:
 {
  "companyName": string (a plausible, entirely fictional Irish SME business name fitting the sector — vary the naming style and surnames used across calls, don't default to the same handful of common Irish surnames every time — must not resemble or reference any real company),
- "industry": string (a specific SME sub-sector, not just a broad category — specific enough that its typical technology needs are inferable, e.g. a hotel implies guest Wi-Fi and hospitality security, a logistics firm implies mobile/field devices). Use this as today's suggested sector unless you have a clearly better, different idea: "${suggestedSector}" — either way, actively avoid defaulting to hospitality, accountancy, or freight/logistics just because they're common training examples; genuine variety across calls matters more than any single suggestion,
+ "industry": string (a specific SME sub-sector, not just a broad category — specific enough that its typical technology needs are inferable, e.g. a hotel implies guest Wi-Fi and hospitality security, a logistics firm implies mobile/field devices).${selectedIndustry ? ` The rep has specifically chosen this industry to practice against — use exactly this sector, or a specific sub-type within it: "${suggestedSector}",` : ` Use this as today's suggested sector unless you have a clearly better, different idea: "${suggestedSector}" — either way, actively avoid defaulting to hospitality, accountancy, or freight/logistics just because they're common training examples; genuine variety across calls matters more than any single suggestion,`}
  "employees": number (between 8 and 220, used internally for realism — shown to the rep only as a vague size band, never the exact figure),
  "description": string (two short sentences giving real operational texture — number of sites, type of customers, general shape of day-to-day operations — enough to reasonably suggest relevant technology needs, e.g. multiple sites implies inter-site connectivity, guest-facing implies guest Wi-Fi and physical security, a mobile workforce implies device management. Do NOT state any of the specific hidden pains directly or name specific systems/vendors),
  "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
- "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "gender": "male"|"female" (matching the first name, used to pick an appropriate voice for text-to-speech), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
- "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away,
+ "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "gender": "male"|"female" (matching the first name, used to pick an appropriate voice for text-to-speech), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"]${selectedRole ? ` — the rep has specifically chosen to practice against a "${selectedRole}" contact, so use exactly this role` : ''}, "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
+ "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away.${propensityAreas ? ` Given the chosen industry/role, these focus areas have the highest real-world propensity for this combination and at least one hidden pain (ideally the most severe one) should come from this list: [${propensityAreas.map(a=>'"'+a+'"').join(', ')}] — but include at least one other area too, since a real business rarely has just one issue,` : ''}
  "openingLine": string, must be ONLY a short, simple way of answering an incoming phone call \u2014 like "Hello?", "Hello, [Name] speaking", or "[Company name], hello" \u2014 nothing more. Do NOT include any context, availability, tone-setting, or hint about being busy/receptive/rushed \u2014 the rep hasn't spoken yet, so the persona has no idea who's calling or why. Save all tone and personality for how they respond AFTER the rep's first message,
  "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
    - exactly 1 of type "news": a plausible, general (not fabricated specific/false) industry news angle relevant to this sector that could open a conversation, e.g. "Ransomware attacks on small hospitality businesses have been widely reported recently — worth raising as a natural opener." Keep it generic/plausible, not a specific invented headline or company,
@@ -2119,6 +2201,7 @@ async function roleplayTurnViaAPI(repText){
   const system = `You are roleplaying as ${p.persona.name}, the ${p.persona.role} at ${p.companyName || 'a small business'}, a ${p.employees}-employee ${p.industry} business in Ireland. Company context: ${p.description} Tone: ${p.persona.tone}
 What you actually care about day to day: ${p.whatTheyCareAbout || 'running the business smoothly and keeping customers happy'} — when you talk about any of your real issues below, frame it in terms of THIS, not abstract technology language. You're not an IT person (unless your role says otherwise) — you think in terms of guests, patients, customers, deliveries, deadlines or reputation, not "network downtime."
 You are being spoken to by a JUNIOR sales rep who is still building confidence and skill at discovery calls. This is a training exercise, so your job is to give them a fair chance to succeed appropriate to your temperament below — not to be an impossible brick wall.
+Cross-selling: if the rep asks about one of your hidden-pain areas and you have genuinely nothing there (or they've already fully explored it), don't just go flat or shut the whole call down — if they then pivot to ask about a DIFFERENT area where you DO have a real hidden pain, engage with that new topic genuinely, the way a real business owner would if a good rep tried a different angle instead of giving up. Rewarding a sensible pivot is part of what this exercise is training.
 Your business's ACTUAL underlying issues are below — don't blurt these out unprompted:
 ${forthcomingByDifficulty[difficulty]}
 Hidden pains:
@@ -2130,7 +2213,7 @@ Score it as:
 - piece: the single best-matching area id from [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], or null if unrelated/small talk
 - questionType: "situation" | "problem" | "implication" | "needpayoff" | "closed" | "other" — classify which SPIN stage the rep's message best represents
 - relevance: integer 0-3, how relevant to a REAL hidden pain in this business (0 = irrelevant, 3 = hits directly on a hidden pain with good framing)
-- qualification: "none" | "surface" | "developing" | "qualified" — how much this exchange advanced genuine qualification. Score generously for a junior rep: any clearly relevant, on-topic question that engages with a real pain should score at least "developing" even if the phrasing isn't textbook SPIN — reserve "none"/"surface" for questions that are genuinely off-topic, closed, or so generic they don't advance anything
+- qualification: "none" | "surface" | "developing" | "qualified" — how much this exchange advanced genuine qualification. Score generously for a junior rep: any clearly relevant, on-topic question that engages with a real pain should score at least "developing" even if the phrasing isn't textbook SPIN — reserve "none"/"surface" for questions that are genuinely off-topic, closed, or so generic they don't advance anything. IMPORTANT: if the rep was just shut down or found no pain in one area (their previous message or two scored "none"/low relevance) and this message pivots to ask a broad, open, genuinely different focus area instead of giving up or repeating the same dead question, treat that pivot itself as good technique — score it at least "developing" even before it lands on a pain, and use the coaching note to specifically praise the pivot (e.g. "Good instinct moving on rather than pushing a dead end")
 - note: one short, encouraging coaching-style sentence — praise the attempt where possible, and if there's a better version of the question, show it briefly rather than just criticising
 
 Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
@@ -2168,7 +2251,7 @@ Produce a final qualification scorecard. Respond with ONLY a valid JSON object, 
  "overallScore": integer 0-100,
  "perArea": [{"piece": id, "level":"none"|"surface"|"developing"|"qualified", "note": short string}] — include only areas that were touched on OR that had a hidden pain,
  "missedPains": [short strings describing hidden pains never meaningfully uncovered — phrase these as gentle "next time, try asking about..." pointers, not criticism],
- "strengths": [2 to 3 short strings — actively look for and credit good questioning habits: asking follow-ups, staying curious, covering multiple areas, keeping the conversation open rather than closed, and if the persona was brisk/dismissive, credit persistence specifically],
+ "strengths": [2 to 3 short strings — actively look for and credit good questioning habits: asking follow-ups, staying curious, covering multiple areas, keeping the conversation open rather than closed, and if the persona was brisk/dismissive, credit persistence specifically. SPECIFICALLY look at the turn-by-turn scoring for a pattern where a low/none-scored area was followed by the rep pivoting to ask about a genuinely different focus area rather than giving up or repeating a dead question — if you see that pattern, call it out explicitly as a strength (e.g. "Good instinct cross-selling into [area] once [other area] wasn't landing")],
  "improvements": [2 to 3 short strings, framed as encouraging next-step suggestions rather than faults — e.g. "Try asking..." rather than "You failed to..."],
  "summary": "2 to 3 sentence encouraging coaching summary written directly to the rep, second person, ending on a constructive note. If difficulty was brisk or dismissive, acknowledge that this was a tougher call than usual."
 }`;
@@ -2220,6 +2303,23 @@ function localRoleplayTurn(repText){
   else { reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='none'; relevance=0; }
   return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, note:'Offline heuristic scoring — connect an AI provider in Settings for full coaching.' } };
 }
+function detectPivot(turnScores){
+  // Looks for a "none"/low-relevance turn on one piece followed later by a
+  // genuinely different piece scoring developing/qualified — evidence the
+  // rep moved on rather than repeating a dead question, which is exactly
+  // the cross-sell behaviour this app is trying to train and reward.
+  for(let i=0;i<turnScores.length;i++){
+    const t = turnScores[i];
+    if(!t.piece || LEVEL_SCORE[t.qualification] > 0) continue;
+    for(let j=i+1;j<turnScores.length;j++){
+      const later = turnScores[j];
+      if(later.piece && later.piece !== t.piece && LEVEL_SCORE[later.qualification] >= 2){
+        return { from: t.piece, to: later.piece };
+      }
+    }
+  }
+  return null;
+}
 function localFinalScoring(){
   const p = Coach.profile;
   const perArea = []; const covered = {};
@@ -2232,13 +2332,18 @@ function localFinalScoring(){
   const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
   let overallLevel = 'Discovery Stage';
   if(pct>=55) overallLevel='Hot Opportunity'; else if(pct>=32) overallLevel='Qualified Opportunity'; else if(pct>=12) overallLevel='Developing Opportunity';
+  const pivot = detectPivot(Coach.turnScores);
+  const strengths = [
+    questionCount>=6 ? `You asked ${questionCount} questions and kept the conversation moving — that's exactly the right instinct.` : 'You kept the conversation moving and asked genuine questions.',
+    'You engaged directly rather than pitching too early — good discipline for a first call.'
+  ];
+  if(pivot){
+    strengths.push(`Good instinct moving from ${PIECE_BY_ID[pivot.from].name} into ${PIECE_BY_ID[pivot.to].name} once the first one wasn't landing — that's real cross-selling, not just giving up on a dead end.`);
+  }
   return {
     overallLevel, overallScore: pct, perArea,
     missedPains: missedPains.length? missedPains : ['Good coverage — you asked about most of the known pain areas.'],
-    strengths:[
-      questionCount>=6 ? `You asked ${questionCount} questions and kept the conversation moving — that's exactly the right instinct.` : 'You kept the conversation moving and asked genuine questions.',
-      'You engaged directly rather than pitching too early — good discipline for a first call.'
-    ],
+    strengths,
     improvements:['Try asking a follow-up "what happens when..." or "what does that cost you" question after each answer — that\'s usually where the real detail comes out.','Keep going a little further into more of the focus areas before wrapping up.'],
     summary:"This is an offline practice summary based on simple keyword matching, since no AI provider is connected — treat it as a rough guide rather than detailed feedback. Add an API key in Settings for full AI-generated coaching."
   };
