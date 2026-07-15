@@ -1250,6 +1250,55 @@ function startPiece(pieceId){
   el('#qual-picker').classList.add('hidden');
   el('#qual-wrap').classList.remove('hidden');
   renderQualHeader();
+  renderPrimer();
+  el('#qual-primer').classList.remove('hidden');
+  el('#qual-practice').classList.add('hidden');
+}
+function renderPrimer(){
+  const piece = PIECE_BY_ID[App.qual.pieceId];
+  const p = piece.primer;
+  const wrap = el('#qual-primer');
+  if(!p){
+    // Defensive fallback in case a piece is ever added without primer content —
+    // skip straight to practice rather than showing an empty screen.
+    wrap.innerHTML = '';
+    beginPractice();
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="primer-card">
+      <h4>What it is</h4>
+      <p>${esc(p.overview)}</p>
+      <h4>Why it matters to SMEs</h4>
+      <p>${esc(p.whyItMatters)}</p>
+      <div class="primer-grid">
+        <div>
+          <h4>Key indicators to listen for</h4>
+          <ul>${p.keyIndicators.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+        </div>
+        <div>
+          <h4>Compelling events</h4>
+          <ul>${p.compellingEvents.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+        </div>
+      </div>
+      <h4>Market context</h4>
+      <p>${esc(p.marketContext)}</p>
+      <h4>Why they should talk to you</h4>
+      <p>${esc(p.valueProp)}</p>
+      <h4>Example SPIN questions</h4>
+      <div class="primer-spin">
+        <div><span class="spin-tag situation">Situation</span>${esc(p.exampleQuestions.situation)}</div>
+        <div><span class="spin-tag problem">Problem</span>${esc(p.exampleQuestions.problem)}</div>
+        <div><span class="spin-tag implication">Implication</span>${esc(p.exampleQuestions.implication)}</div>
+        <div><span class="spin-tag needpayoff">Need-payoff</span>${esc(p.exampleQuestions.needpayoff)}</div>
+      </div>
+      <button class="btn btn-primary" id="btn-start-practice" style="margin-top:22px;">Start Practice Questions →</button>
+    </div>`;
+  el('#btn-start-practice').addEventListener('click', beginPractice);
+}
+function beginPractice(){
+  el('#qual-primer').classList.add('hidden');
+  el('#qual-practice').classList.remove('hidden');
   renderQualNode();
 }
 function renderQualPicker(){
@@ -1368,11 +1417,12 @@ function renderQualNode(){
     const badgeLabel = badgeLabels[node.type] || '';
 
     if(!App.qual.gatePassed){
-      if(!App.qual._gateChoices || App.qual._gateChoices.nodeId !== App.qual.nodeId){
-        const distractors = pickDistractors(3).map(d=>({text:d.text, note:d.note, correct:false}));
+      if(!App.qual._gateChoices || App.qual._gateChoices.pieceId !== App.qual.pieceId || App.qual._gateChoices.nodeId !== App.qual.nodeId){
+        const pieceDistractors = piece.distractorQuestions && piece.distractorQuestions.length ? piece.distractorQuestions : DISTRACTOR_QUESTIONS;
+        const distractors = pieceDistractors.slice().sort(()=> Math.random()-0.5).slice(0,3).map(d=>({text:d.text, note:d.note, correct:false}));
         const correctChoice = {text:node.q, note:null, correct:true};
         const all = [...distractors, correctChoice].sort(()=> Math.random()-0.5);
-        App.qual._gateChoices = { nodeId: App.qual.nodeId, choices: all };
+        App.qual._gateChoices = { pieceId: App.qual.pieceId, nodeId: App.qual.nodeId, choices: all };
       }
       const choices = App.qual._gateChoices.choices;
       body.innerHTML = `
