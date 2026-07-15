@@ -157,6 +157,10 @@
   .spin-tag.problem{background:#B9791F;}
   .spin-tag.implication{background:#4A3653;}
   .spin-tag.needpayoff{background:#23283C;}
+  .primer-objections{display:flex;flex-direction:column;gap:10px;}
+  .objection-item{background:#fff;border:1px solid var(--line);border-left:4px solid var(--danger);border-radius:var(--radius-sm);padding:12px 14px;}
+  .obj-line{font-weight:700;font-size:13.5px;color:var(--navy);margin-bottom:5px;}
+  .obj-response{font-size:13.5px;line-height:1.5;color:var(--ink-soft);}
   .qtype-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
   .qtype-badge{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:4px 10px;border-radius:99px;color:#fff;}
   .qtype-badge.situation{background:var(--teal-deep);}

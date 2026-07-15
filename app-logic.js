@@ -1292,6 +1292,15 @@ function renderPrimer(){
         <div><span class="spin-tag implication">Implication</span>${esc(p.exampleQuestions.implication)}</div>
         <div><span class="spin-tag needpayoff">Need-payoff</span>${esc(p.exampleQuestions.needpayoff)}</div>
       </div>
+      ${p.objections && p.objections.length ? `
+      <h4>Common objections here, and how to handle them</h4>
+      <div class="primer-objections">
+        ${p.objections.map(o=>`
+        <div class="objection-item">
+          <div class="obj-line">${esc(o.objection)}</div>
+          <div class="obj-response">${esc(o.response)}</div>
+        </div>`).join('')}
+      </div>` : ''}
       <button class="btn btn-primary" id="btn-start-practice" style="margin-top:22px;">Start Practice Questions →</button>
     </div>`;
   el('#btn-start-practice').addEventListener('click', beginPractice);
@@ -1368,7 +1377,6 @@ function renderQualNode(){
         ${notesHtml}
         <div class="nextstep-box">➜ ${esc(node.next)}</div>
         ${node.closeGuidance ? `<div class="needpayoff-box"><span class="np-label">How to close from here</span>${esc(node.closeGuidance)}</div>` : ''}
-        ${node.cta ? `<a class="btn btn-primary" href="${esc(node.cta.href)}" style="margin-top:14px;">${esc(node.cta.label)}</a>` : ''}
         <div class="result-actions">
           <button class="btn btn-primary" id="btn-retry-piece">Try Different Answers</button>
           <button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>
@@ -1418,7 +1426,8 @@ function renderQualNode(){
 
     if(!App.qual.gatePassed){
       if(!App.qual._gateChoices || App.qual._gateChoices.pieceId !== App.qual.pieceId || App.qual._gateChoices.nodeId !== App.qual.nodeId){
-        const pieceDistractors = piece.distractorQuestions && piece.distractorQuestions.length ? piece.distractorQuestions : DISTRACTOR_QUESTIONS;
+        const stageDistractors = piece.distractorQuestions && piece.distractorQuestions[node.type];
+        const pieceDistractors = (stageDistractors && stageDistractors.length) ? stageDistractors : DISTRACTOR_QUESTIONS;
         const distractors = pieceDistractors.slice().sort(()=> Math.random()-0.5).slice(0,3).map(d=>({text:d.text, note:d.note, correct:false}));
         const correctChoice = {text:node.q, note:null, correct:true};
         const all = [...distractors, correctChoice].sort(()=> Math.random()-0.5);
