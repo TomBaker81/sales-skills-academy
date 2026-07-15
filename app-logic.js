@@ -366,7 +366,67 @@ loadSettings();
 /* =========================================================================
    APP STATE
    ========================================================================= */
-const App = { view:'home', qual:{ pieceId:null, nodeId:'start', notes:[] }, sessionLog:[] };
+const App = { view:'home', qual:{ pieceId:null, nodeId:'start', notes:[] }, sessionLog:[], repName:'' };
+
+/* ---------- Leaderboard: shared score tracking across everyone using this tool ----------
+   Backed by netlify/functions/scores-api.js, which stores entries in Netlify
+   Blobs (site-wide, shared storage — not per-browser like localStorage). A
+   local name cache is kept as a fallback so the "pick from existing" list
+   still works even if the network call is slow or fails. */
+const Leaderboard = {
+  API_URL: '/.netlify/functions/scores-api',
+  entries: [],
+  async init(){
+    const savedName = safeStorageGet('ssa_rep_name');
+    if(savedName){
+      el('#rep-name-input').value = savedName;
+      App.repName = savedName;
+      el('#rep-name-badge').textContent = savedName;
+    }
+    this.populateNameListFromCache();
+    try{
+      const resp = await fetch(this.API_URL, { method:'GET' });
+      if(resp.ok){
+        const data = await resp.json();
+        this.entries = Array.isArray(data.entries) ? data.entries : [];
+        this.cacheNames(this.entries.map(e=>e.name));
+        this.populateNameListFromCache();
+      }
+    } catch(e){ /* offline or function unavailable — local cache/datalist still works */ }
+  },
+  rememberName(name){
+    this.cacheNames([name]);
+    this.populateNameListFromCache();
+  },
+  cacheNames(names){
+    const existing = JSON.parse(safeStorageGet('ssa_known_names') || '[]');
+    const merged = Array.from(new Set([...existing, ...names.filter(Boolean)])).slice(-100);
+    safeStorageSet('ssa_known_names', JSON.stringify(merged));
+  },
+  populateNameListFromCache(){
+    const names = JSON.parse(safeStorageGet('ssa_known_names') || '[]');
+    const list = el('#rep-name-list');
+    list.innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  },
+  async submitScore({name, score, level, company, difficulty}){
+    if(!name) return;
+    try{
+      await fetch(this.API_URL, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, score, level, company, difficulty})
+      });
+    } catch(e){ /* scorecard is still shown to the rep even if the save fails */ }
+  },
+  async fetchEntries(){
+    try{
+      const resp = await fetch(this.API_URL, { method:'GET' });
+      if(!resp.ok) return null;
+      const data = await resp.json();
+      return Array.isArray(data.entries) ? data.entries : [];
+    } catch(e){ return null; }
+  }
+};
 const Coach = {
   active:false, mode:null, profile:null, messages:[], turnScores:[], ended:false, busy:false,
   usedHints:new Set(), hintNudgeTimer:null, inactivityEndTimer:null
@@ -501,8 +561,10 @@ function setView(name){
   el('#view-training').classList.toggle('hidden', name!=='training');
   el('#view-qual').classList.toggle('hidden', name!=='qual');
   el('#view-coach').classList.toggle('hidden', name!=='coach');
+  el('#view-leaderboard').classList.toggle('hidden', name!=='leaderboard');
   if(name==='home') renderHome();
   if(name==='training') renderTraining();
+  if(name==='leaderboard') renderLeaderboard();
   window.scrollTo({top:0, behavior:'smooth'});
 }
 els('.tab-btn').forEach(b=> b.addEventListener('click', ()=> setView(b.dataset.view)));
@@ -812,6 +874,66 @@ function renderTraining(){
 }
 
 /* =========================================================================
+   LEADERBOARD RENDERING
+   ========================================================================= */
+function aggregateLeaderboard(entries){
+  const byName = {};
+  entries.forEach(e=>{
+    if(!e || !e.name) return;
+    if(!byName[e.name]) byName[e.name] = { name:e.name, best:0, bestLevel:'', bestCompany:'', total:0, calls:0, lastTimestamp:'' };
+    const row = byName[e.name];
+    row.calls += 1;
+    row.total += (Number(e.score) || 0);
+    if((Number(e.score)||0) >= row.best){
+      row.best = Number(e.score) || 0;
+      row.bestLevel = e.level || '';
+      row.bestCompany = e.company || '';
+    }
+    if(!row.lastTimestamp || e.timestamp > row.lastTimestamp) row.lastTimestamp = e.timestamp || '';
+  });
+  return Object.values(byName)
+    .map(r => ({ ...r, avg: Math.round(r.total / r.calls) }))
+    .sort((a,b) => b.best - a.best || b.avg - a.avg);
+}
+async function renderLeaderboard(){
+  const wrap = el('#leaderboard-body');
+  wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">Loading leaderboard…</p>`;
+  const entries = await Leaderboard.fetchEntries();
+  if(entries === null){
+    wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">Couldn't load the leaderboard right now — check your connection and try switching back to this tab again.</p>`;
+    return;
+  }
+  if(entries.length === 0){
+    wrap.innerHTML = `<p style="color:var(--ink-faint);font-size:14px;">No scores yet — complete a Virtual Sales Call and click "Score Me Now" to appear here.</p>`;
+    return;
+  }
+  const ranked = aggregateLeaderboard(entries);
+  const medal = i => i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
+  wrap.innerHTML = `
+    <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr style="background:var(--navy);color:#fff;text-align:left;">
+          <th style="padding:10px 14px;font-size:12px;">Rank</th>
+          <th style="padding:10px 14px;font-size:12px;">Name</th>
+          <th style="padding:10px 14px;font-size:12px;">Best score</th>
+          <th style="padding:10px 14px;font-size:12px;">Average</th>
+          <th style="padding:10px 14px;font-size:12px;">Calls</th>
+          <th style="padding:10px 14px;font-size:12px;">Best call</th>
+        </tr>
+        ${ranked.map((r,i)=>`
+        <tr style="border-top:1px solid var(--line);${i===0?'background:#FBF6E8;':''}">
+          <td style="padding:10px 14px;font-size:15px;">${medal(i)}</td>
+          <td style="padding:10px 14px;font-weight:700;color:var(--navy);">${esc(r.name)}</td>
+          <td style="padding:10px 14px;font-weight:700;color:var(--teal);">${r.best}/100</td>
+          <td style="padding:10px 14px;color:var(--ink-soft);">${r.avg}/100</td>
+          <td style="padding:10px 14px;color:var(--ink-soft);">${r.calls}</td>
+          <td style="padding:10px 14px;color:var(--ink-faint);font-size:13px;">${esc(r.bestCompany)}${r.bestLevel?' · '+esc(r.bestLevel):''}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+}
+
+/* =========================================================================
    HOME / OVERVIEW RENDERING
    ========================================================================= */
 function bestLevelForPiece(pieceId){
@@ -1096,6 +1218,19 @@ function pickFallbackProfile(difficulty){
   return profile;
 }
 async function newScenario(){
+  const repName = el('#rep-name-input').value.trim();
+  if(!repName){
+    el('#rep-name-error').style.display = 'block';
+    el('#rep-name-input').focus();
+    return;
+  }
+  el('#rep-name-error').style.display = 'none';
+  App.repName = repName;
+  safeStorageSet('ssa_rep_name', repName);
+  el('#rep-name-badge').textContent = repName;
+  el('#rep-name-badge').classList.remove('hidden');
+  Leaderboard.rememberName(repName);
+
   el('#btn-new-scenario').disabled = true;
   el('#btn-new-scenario').textContent = 'Generating…';
   Coach.active = true; Coach.messages = []; Coach.turnScores = []; Coach.ended = false; Coach.usedHints = new Set();
@@ -1316,6 +1451,7 @@ function stopListening(){
   }
 }
 initVoiceFeatures();
+Leaderboard.init();
 function addHintBubble(hint, auto){
   const empty = el('#chat-empty'); if(empty) empty.remove();
   const scroll = el('#chat-scroll');
@@ -1635,6 +1771,13 @@ async function endScenario(){
   try{ data = Coach.mode==='ai' ? await finalScoringViaAPI() : localFinalScoring(); }
   catch(err){ data = localFinalScoring(); }
   renderScorecard(data); openModal();
+  Leaderboard.submitScore({
+    name: App.repName,
+    score: data.overallScore,
+    level: data.overallLevel,
+    company: Coach.profile.companyName || '',
+    difficulty: Coach.profile.difficulty || ''
+  });
 }
 const RAG = {
   qualified:{band:'green', color:'#00996C', bg:'#DFF7EC', label:'Green'},
