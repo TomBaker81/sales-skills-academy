@@ -1487,6 +1487,9 @@ async function newScenario(){
   renderProfileCard();
   renderAreaRows();
   el('#chat-scroll').innerHTML = '<div class="chat-empty" id="chat-empty">Open with a broad Situation question about one of the focus areas.</div>';
+  showTyping();
+  await wait(typingDelayFor(profile.openingLine) * 0.4); // shorter than a full reply — it's just "Hello?"
+  hideTyping();
   addBubble('customer', profile.openingLine, profile.persona.name);
   if(mode==='offline'){
     if(!Settings.apiKey){
@@ -1797,6 +1800,20 @@ function showTyping(){
   scroll.appendChild(div); scroll.scrollTop = scroll.scrollHeight;
 }
 function hideTyping(){ const t = el('#typing-indicator'); if(t) t.remove(); }
+function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+function typingDelayFor(text){
+  // Simulates a real person reading the rep's message, then typing the reply —
+  // otherwise even a thoughtful, detailed answer arrives the instant the API
+  // responds, which feels nothing like texting with an actual person.
+  // Roughly 45 words/minute typing speed, plus a fixed "reading/thinking" pause,
+  // with sensible floor/ceiling so short replies don't feel sluggish and long
+  // ones don't feel like they've stalled.
+  const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+  const thinkingPauseMs = 350 + Math.random()*300;
+  const typingMs = (words / 45) * 60 * 1000;
+  const jitter = 0.85 + Math.random()*0.3; // +/-15% so every reply doesn't feel identically paced
+  return Math.min(Math.max((thinkingPauseMs + typingMs) * jitter, 500), 3800);
+}
 
 const chatInput = el('#chat-input');
 chatInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendRepMessage(); } });
@@ -1815,6 +1832,7 @@ async function sendRepMessage(){
 
   try{
     let result = Coach.mode==='ai' ? await roleplayTurnViaAPI(text) : localRoleplayTurn(text);
+    await wait(typingDelayFor(result.reply));
     hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
@@ -1824,6 +1842,9 @@ async function sendRepMessage(){
     addBubble('system', "Couldn't reach the AI coach (" + err.message + ") — switching to offline practice mode.");
     Coach.mode = 'offline'; setModeBadge('offline');
     const result = localRoleplayTurn(text);
+    showTyping();
+    await wait(typingDelayFor(result.reply));
+    hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
     Coach.turnScores.push(result.scoring); updateGauge();
