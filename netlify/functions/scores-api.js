@@ -29,7 +29,7 @@ exports.handler = async (event) => {
 
   let store;
   try {
-    store = getStore({ name: 'leaderboard', consistency: 'strong' });
+    store = getStore('leaderboard');
   } catch (err) {
     return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Blob store unavailable: ' + err.message }) };
   }
