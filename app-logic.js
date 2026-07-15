@@ -1283,6 +1283,23 @@ function renderPrimer(){
       </div>
       <h4>Market context</h4>
       <p>${esc(p.marketContext)}</p>
+      ${p.regulatory ? `
+      <h4>Regulatory &amp; compliance landscape</h4>
+      <p>${esc(p.regulatory.intro)}</p>
+      <div class="primer-regulatory">
+        ${p.regulatory.items.map(r=>`
+        <div class="reg-item">
+          <div class="reg-name">${esc(r.name)}</div>
+          <div class="reg-explanation">${esc(r.explanation)}</div>
+        </div>`).join('')}
+      </div>
+      <p>${esc(p.regulatory.whyItMatters)}</p>
+      ${p.regulatory.learnMoreLinks && p.regulatory.learnMoreLinks.length ? `
+      <div class="reg-links">
+        <span class="reg-links-label">Learn more:</span>
+        ${p.regulatory.learnMoreLinks.map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗</a>`).join('')}
+      </div>` : ''}` : (p.regulatoryNote ? `
+      <div class="reg-note">📋 ${esc(p.regulatoryNote)}</div>` : '')}
       <h4>Why they should talk to you</h4>
       <p>${esc(p.valueProp)}</p>
       <h4>Example SPIN questions</h4>
