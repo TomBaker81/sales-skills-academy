@@ -467,6 +467,13 @@ const Leaderboard = {
       const data = await resp.json();
       return Array.isArray(data.entries) ? data.entries : [];
     } catch(e){ return null; }
+  },
+  async deleteByName(name){
+    try{
+      const resp = await fetch(this.API_URL + '?name=' + encodeURIComponent(name), { method:'DELETE' });
+      if(!resp.ok) return null;
+      return await resp.json();
+    } catch(e){ return null; }
   }
 };
 const Coach = {
@@ -1131,6 +1138,9 @@ async function renderManagerReport(){
                 </ul>
               </div>
             </div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
+              <button class="btn btn-outline mgr-delete-btn" data-name="${esc(r.name)}" style="color:var(--danger);border-color:var(--danger);font-size:12.5px;padding:6px 12px;">Remove ${esc(r.name)} from leaderboard</button>
+            </div>
           </div>
         </td></tr>`).join('')}
       </table>
@@ -1140,6 +1150,22 @@ async function renderManagerReport(){
   els('.mgr-rep-row').forEach(row=>{
     row.addEventListener('click', ()=>{
       el('#mgr-detail-'+row.dataset.idx).classList.toggle('hidden');
+    });
+  });
+  els('.mgr-delete-btn').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation(); // don't also toggle the parent row's expand/collapse
+      const name = btn.dataset.name;
+      if(!confirm(`Remove all leaderboard entries for "${name}"? This can't be undone.`)) return;
+      btn.disabled = true; btn.textContent = 'Removing…';
+      const result = await Leaderboard.deleteByName(name);
+      if(result && result.ok){
+        renderManagerReport(); // re-fetch and re-render so the removed rep disappears immediately
+      } else {
+        btn.disabled = false;
+        btn.textContent = `Remove ${name} from leaderboard`;
+        alert("Couldn't remove that entry — check your connection and try again.");
+      }
     });
   });
 }
