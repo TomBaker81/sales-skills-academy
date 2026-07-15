@@ -10,7 +10,8 @@ const FALLBACK_PROFILES = [
       "name": "Aoife Byrne",
       "role": "Owner/Founder",
       "category": "Owner",
-      "tone": "Warm, friendly and happy to chat once she knows you’re not wasting her time — a little rushed, answers in short bursts, often mid-task."
+      "tone": "Warm, friendly and happy to chat once she knows you’re not wasting her time — a little rushed, answers in short bursts, often mid-task.",
+      "gender": "female"
     },
     "hiddenPains": [
       {
@@ -42,7 +43,8 @@ const FALLBACK_PROFILES = [
       "name": "Conor Walsh",
       "role": "IT Manager",
       "category": "IT/Technical",
-      "tone": "Precise and methodical, happy to go into detail once he trusts you know what you’re talking about."
+      "tone": "Precise and methodical, happy to go into detail once he trusts you know what you’re talking about.",
+      "gender": "male"
     },
     "hiddenPains": [
       {
@@ -74,7 +76,8 @@ const FALLBACK_PROFILES = [
       "name": "Marie Fitzgerald",
       "role": "Operations Director (C-level)",
       "category": "C-Level",
-      "tone": "Direct and practical, thinks in terms of production impact rather than tech jargon — businesslike, wants things to move quickly."
+      "tone": "Direct and practical, thinks in terms of production impact rather than tech jargon — businesslike, wants things to move quickly.",
+      "gender": "female"
     },
     "hiddenPains": [
       {
@@ -111,7 +114,8 @@ const FALLBACK_PROFILES = [
       "name": "Niamh O’Sullivan",
       "role": "Finance Director (C-level)",
       "category": "C-Level",
-      "tone": "Budget-conscious and wants the business case, but friendly and willing to talk once she sees the relevance."
+      "tone": "Budget-conscious and wants the business case, but friendly and willing to talk once she sees the relevance.",
+      "gender": "female"
     },
     "hiddenPains": [
       {
@@ -148,7 +152,8 @@ const FALLBACK_PROFILES = [
       "name": "Darragh Kelly",
       "role": "Operations Director (C-level)",
       "category": "C-Level",
-      "tone": "Blunt and time-pressed, wants the point made quickly, but not unfriendly about it."
+      "tone": "Blunt and time-pressed, wants the point made quickly, but not unfriendly about it.",
+      "gender": "male"
     },
     "hiddenPains": [
       {
@@ -180,7 +185,8 @@ const FALLBACK_PROFILES = [
       "name": "Dr. Fiona Brennan",
       "role": "Owner/Founder",
       "category": "Owner",
-      "tone": "Warm and personable, though thoughtful about patient data — happy to talk once she understands why you’re asking."
+      "tone": "Warm and personable, though thoughtful about patient data — happy to talk once she understands why you’re asking.",
+      "gender": "female"
     },
     "hiddenPains": [
       {
@@ -217,7 +223,8 @@ const FALLBACK_PROFILES = [
       "name": "Tom Brogan",
       "role": "Owner/Founder",
       "category": "Owner",
-      "tone": "Gruff and skeptical of sales calls, visibly impatient at first — needs a genuinely sharp, relevant question before he opens up at all. Never abusive, just hard-won."
+      "tone": "Gruff and skeptical of sales calls, visibly impatient at first — needs a genuinely sharp, relevant question before he opens up at all. Never abusive, just hard-won.",
+      "gender": "male"
     },
     "hiddenPains": [
       {
@@ -249,7 +256,8 @@ const FALLBACK_PROFILES = [
       "name": "Sinead Nolan",
       "role": "Operations Director (C-level)",
       "category": "C-Level",
-      "tone": "Sharp, a little dismissive at first, clearly has heard a hundred sales pitches — needs the rep to demonstrate real relevance quickly or she will end the call. Professional throughout, never rude."
+      "tone": "Sharp, a little dismissive at first, clearly has heard a hundred sales pitches — needs the rep to demonstrate real relevance quickly or she will end the call. Professional throughout, never rude.",
+      "gender": "female"
     },
     "hiddenPains": [
       {
@@ -281,7 +289,8 @@ const FALLBACK_PROFILES = [
       "name": "Paul Whelan",
       "role": "Operations Director (C-level)",
       "category": "C-Level",
-      "tone": "Warm and practical, thinks in terms of keeping the vans moving rather than technology for its own sake — happy to talk once he sees the relevance to the day-to-day."
+      "tone": "Warm and practical, thinks in terms of keeping the vans moving rather than technology for its own sake — happy to talk once he sees the relevance to the day-to-day.",
+      "gender": "male"
     },
     "hiddenPains": [
       {
@@ -313,7 +322,8 @@ const FALLBACK_PROFILES = [
       "name": "Grainne Dolan",
       "role": "Owner/Founder",
       "category": "Owner",
-      "tone": "Brisk and time-poor, but will engage properly once she sees a clear pounds-and-pence reason to listen."
+      "tone": "Brisk and time-poor, but will engage properly once she sees a clear pounds-and-pence reason to listen.",
+      "gender": "female"
     },
     "hiddenPains": [
       {
@@ -1466,6 +1476,7 @@ async function newScenario(){
     catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickFallbackProfile(difficulty); }
   }
   Coach.profile = profile; Coach.mode = mode;
+  updateVoiceForCurrentPersona();
   setModeBadge(mode);
 
   el('#coach-idle').classList.add('hidden');
@@ -1588,21 +1599,47 @@ function addBubble(who, text, name){
    TTS voices) — no separate API key or server proxy needed. Firefox/Safari have much
    weaker or no support, so everything here is feature-detected and hidden if unavailable. */
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-const Voice = { recognizing:false, recognizer:null, enabled:false, googleVoice:null };
+const Voice = { recognizing:false, recognizer:null, enabled:false, currentVoice:null };
 
-function pickGoogleVoice(){
+// Many higher-quality "Online (Natural)" voices (Microsoft Edge/Windows) use a
+// first name rather than the word "male"/"female" — without this lookup they'd
+// get skipped in favour of lower-quality voices that do self-label, which
+// defeats the point of preferring them in the first place.
+const KNOWN_VOICE_GENDER = {
+  female: ['aria','jenny','michelle','sara','emma','ana','libby','sonia','natasha','clara','elsa','denise','katja'],
+  male: ['guy','davis','andrew','brian','christopher','eric','tony','ryan','william','liam','ravi','matthew']
+};
+function pickVoiceForGender(gender){
   const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-  Voice.googleVoice = voices.find(v => /google/i.test(v.name) && /en/i.test(v.lang))
-    || voices.find(v => /google/i.test(v.name))
-    || voices.find(v => /en/i.test(v.lang))
+  if(!voices.length) return null;
+  const isEnglish = v => /^en/i.test(v.lang);
+  const nameHasAny = (v, list) => list.some(n => v.name.toLowerCase().includes(n));
+  const isMale = v => (/male/i.test(v.name) && !/female/i.test(v.name)) || nameHasAny(v, KNOWN_VOICE_GENDER.male);
+  const isFemale = v => /female/i.test(v.name) || nameHasAny(v, KNOWN_VOICE_GENDER.female);
+  const matchesGender = v => gender === 'male' ? isMale(v) : isFemale(v);
+  // Prefer higher-quality "Natural"/"Neural"/"Online" voices (these exist on Edge/Windows and sound
+  // dramatically less robotic than the classic default engine) that also match gender, then fall back
+  // through progressively looser matches so there's always SOME voice, even on browsers/OSes without
+  // gender-labelled or Natural-quality options.
+  return voices.find(v => isEnglish(v) && matchesGender(v) && /natural|neural|online/i.test(v.name))
+    || voices.find(v => isEnglish(v) && matchesGender(v) && /google/i.test(v.name))
+    || voices.find(v => isEnglish(v) && matchesGender(v))
+    || voices.find(v => isEnglish(v) && /natural|neural|online/i.test(v.name))
+    || voices.find(v => isEnglish(v) && /google/i.test(v.name))
+    || voices.find(v => isEnglish(v))
     || voices[0] || null;
+}
+function updateVoiceForCurrentPersona(){
+  const gender = (Coach.profile && Coach.profile.persona && Coach.profile.persona.gender) || 'female';
+  Voice.currentVoice = pickVoiceForGender(gender);
 }
 function speakText(text){
   if(!Voice.enabled || !window.speechSynthesis) return;
   window.speechSynthesis.cancel(); // don't let replies queue up and overlap
   const utter = new SpeechSynthesisUtterance(text);
-  if(Voice.googleVoice) utter.voice = Voice.googleVoice;
+  if(Voice.currentVoice) utter.voice = Voice.currentVoice;
   utter.rate = 1.0;
+  utter.pitch = 1.0;
   window.speechSynthesis.speak(utter);
 }
 function buildRecognizer(){
@@ -1629,8 +1666,8 @@ function buildRecognizer(){
 }
 function initVoiceFeatures(){
   if(window.speechSynthesis){
-    pickGoogleVoice();
-    window.speechSynthesis.onvoiceschanged = pickGoogleVoice;
+    updateVoiceForCurrentPersona();
+    window.speechSynthesis.onvoiceschanged = updateVoiceForCurrentPersona;
     el('#voice-toggle-wrap').style.display = 'flex';
     const saved = safeStorageGet('ssa_voice_replies');
     Voice.enabled = saved === '1';
@@ -1825,7 +1862,7 @@ async function generateProfileViaAPI(difficulty){
  "employees": number (between 8 and 220, used internally for realism — shown to the rep only as a vague size band, never the exact figure),
  "description": string (two short sentences giving real operational texture — number of sites, type of customers, general shape of day-to-day operations — enough to reasonably suggest relevant technology needs, e.g. multiple sites implies inter-site connectivity, guest-facing implies guest Wi-Fi and physical security, a mobile workforce implies device management. Do NOT state any of the specific hidden pains directly or name specific systems/vendors),
  "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
- "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
+ "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "gender": "male"|"female" (matching the first name, used to pick an appropriate voice for text-to-speech), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"], "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
  "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away,
  "openingLine": string, must be ONLY a short, simple way of answering an incoming phone call \u2014 like "Hello?", "Hello, [Name] speaking", or "[Company name], hello" \u2014 nothing more. Do NOT include any context, availability, tone-setting, or hint about being busy/receptive/rushed \u2014 the rep hasn't spoken yet, so the persona has no idea who's calling or why. Save all tone and personality for how they respond AFTER the rep's first message,
  "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
