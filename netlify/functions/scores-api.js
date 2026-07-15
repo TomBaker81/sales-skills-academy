@@ -11,11 +11,12 @@
 // score records. This is a small internal tool with modest write volume, so
 // one array is simpler and more than adequate rather than one blob per entry.
 
-const { getStore } = require('@netlify/blobs');
+const { getStore, connectLambda } = require('@netlify/blobs');
 
 const MAX_ENTRIES = 2000; // simple cap so the blob can't grow unbounded
 
 exports.handler = async (event) => {
+  connectLambda(event);
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
