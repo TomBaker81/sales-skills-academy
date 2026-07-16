@@ -1653,6 +1653,44 @@ el('#btn-crit-toggle').addEventListener('click', ()=>{
   const showing = panel.classList.toggle('show');
   el('#btn-crit-toggle').textContent = (showing?'Hide':'Show') + ' qualification criteria for this area ' + (showing?'▴':'▾');
 });
+// Chooses which of a node's options gets revealed as "what the customer
+// says," once the rep has passed the question-gate. This used to be a flat
+// coin-flip for every stage, which caused two real problems: (1) a rep who
+// correctly identified a genuinely severe, well-defined problem could still
+// have the final result randomly downgraded by an unrelated 50/50 flip at
+// the Implication stage, disconnecting the score from the rep's actual
+// skill; (2) an optional follow-up question's revealed answer was picked
+// completely independently of the primary answer just given, occasionally
+// producing a narratively contradictory pair (e.g. "this is a big deal" then,
+// moments later, "actually that's the whole picture, nothing more to it").
+function pickRevealedOption(node){
+  const opts = node.options;
+  // Follow-up nodes (tagged at build time with which parent branch they
+  // belong to): strongly correlate with what was already established,
+  // rather than picking independently — a follow-up should usually
+  // reinforce the same story, not flatly contradict it.
+  if(node.parentImpact){
+    const reinforceIdx = node.parentImpact === 'high' ? node.reinforceIdx : (1 - node.reinforceIdx);
+    return Math.random() < 0.82 ? opts[reinforceIdx] : opts[1-reinforceIdx];
+  }
+  if(node.parentEngagement){
+    const reinforceIdx = node.parentEngagement === 'positive' ? node.reinforceIdx : (1 - node.reinforceIdx);
+    return Math.random() < 0.82 ? opts[reinforceIdx] : opts[1-reinforceIdx];
+  }
+  // Primary Implication/Need-payoff reveal: the rep has already demonstrated
+  // the skill being tested here by picking the right question at the gate,
+  // so the outcome should usually reflect that rather than being a flat
+  // coin-flip that can erase a genuinely well-identified problem's severity.
+  // Still not guaranteed, to keep some realistic variety.
+  const highIdx = opts.findIndex(o => o.impact === 'high' || o.engagement === 'positive');
+  if(highIdx !== -1){
+    return Math.random() < 0.72 ? opts[highIdx] : opts[highIdx === 0 ? 1 : 0];
+  }
+  // Situation/Problem stages (and their follow-ups): genuine variety in what
+  // the fictional customer's actual circumstances are — the rep can't
+  // control or predict this, so it stays uniformly random.
+  return opts[Math.floor(Math.random()*opts.length)];
+}
 function currentStepIndex(node){
   const t = node.type==='choice' ? node.stage : node.type;
   if(t==='situation') return 0;
@@ -1775,8 +1813,7 @@ function renderQualNode(){
         const picked = choices[idx];
         if(picked.correct){
           App.qual.gatePassed = true;
-          const opts = node.options;
-          App.qual.revealedOption = opts[Math.floor(Math.random()*opts.length)];
+          App.qual.revealedOption = pickRevealedOption(node);
           renderQualNode();
         } else {
           el('#gate-feedback').innerHTML = `<div class="gate-hint">${esc(picked.note)} Try picking a different question.</div>`;

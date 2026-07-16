@@ -183,7 +183,9 @@ function buildTrees(){
             newNodes[ifuId] = {
               type:'implication',
               q: piece.implicationFollowUp.q,
-              options: piece.implicationFollowUp.options.map(o=>({label:o.label, next: npId, note:o.note}))
+              options: piece.implicationFollowUp.options.map(o=>({label:o.label, next: npId, note:o.note})),
+              parentImpact: impact,   // 'high' or 'low' — whichever the primary Implication reveal just was
+              reinforceIdx: 0         // option 0 ("goes wider") reinforces; option 1 ("that's the whole picture") contains — verified consistent across all pieces' authored implicationFollowUp content
             };
           }
 
@@ -228,7 +230,9 @@ function buildTrees(){
               newNodes[nfuId] = {
                 type:'needpayoff',
                 q: piece.needpayoffFollowUp.q,
-                options: piece.needpayoffFollowUp.options.map(o=>({label:o.label, next: resultId, note:o.note}))
+                options: piece.needpayoffFollowUp.options.map(o=>({label:o.label, next: resultId, note:o.note})),
+                parentEngagement: engagement,  // 'positive' or 'hesitant' — whichever the primary Need-payoff reveal just was
+                reinforceIdx: 0                // option 0 ("keen to move soon") reinforces; option 1 ("future consideration") contains
               };
             }
           });
