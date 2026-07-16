@@ -2883,10 +2883,14 @@ Score it as:
   * Correctly recognising this contact isn't the right person for a topic, and asking who is, or asking for an introduction/referral — this is a POSITIVE outcome, not a failure, when handled well
   * Following up on something the persona just said rather than moving on too fast
   * Not forcing a cross-sell pitch onto a topic the customer has clearly shown no interest in or ownership of
+- infoLevel: integer 0-5, how deep the INFORMATION revealed in your reply actually goes on the relevant hidden pain (not how good the rep's question was — this tracks what you, the persona, actually gave away): 0 = no meaningful information (deflection/small talk), 1 = a general observation only, 2 = a specific, named problem, 3 = operational or financial impact of that problem, 4 = stakeholder, supplier, timing or decision-process detail, 5 = an agreed action or concrete next step. This should generally only increase or hold across a conversation on the same pain, not jump backwards, unless the topic genuinely changed.
+- roleFit: integer 0-3, how well-suited this question was to what THIS specific contact (given their role) could actually be expected to know or own — 3 = perfectly pitched at their level, 0 = asked as if they were a different role entirely (e.g. deep technical detail put to a non-technical Office Manager)
+- listening: integer 0-3, how well this message actually builds on what you (the persona) just said in your previous reply, versus ignoring it and asking something generic or already-covered — 3 = clearly references or builds on the specific thing you just said, 0 = could have been asked with no memory of the conversation at all
+- commercialJudgement: integer 0-3, overall business judgement shown in this specific message — reading buying signals correctly, not forcing a pitch prematurely, recognising when to stop pushing a dead line of questioning — 3 = excellent judgement for the moment, 0 = poor judgement (e.g. pitching before any need is established, or ignoring a clear signal to stop)
 - note: one or two short, encouraging coaching-style sentences that explain the REASONING, not just praise or criticise — what they did well or could improve, whether this contact was even the right person to ask about this topic, and if there's a clearly better next move (probe deeper, pivot to a different area, or ask for the right stakeholder), name it briefly
 
 Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
-{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "note": "..."}}`;
+{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "note": "..."}}`;
 
   const history = [];
   Coach.messages.forEach(m=>{ if(m.who==='rep') history.push({role:'user', content:m.text}); else history.push({role:'assistant', content:m.text}); });
@@ -2979,19 +2983,24 @@ function localRoleplayTurn(repText){
   const outsideRole = hiddenPain && roleProfile && !roleProfile.strongAreas.includes(pieceId);
   // Tougher personas need a sharper question (higher probe strength) before opening up.
   const threshold = difficulty==='dismissive' ? 2 : 1;
-  let reply, qualification, relevance, questionType, note;
+  let reply, qualification, relevance, questionType, infoLevel, roleFit, listening, commercialJudgement, note;
   questionType = strength>=2 ? 'implication' : (repText.trim().endsWith('?') ? 'situation' : 'other');
   note = 'Offline heuristic scoring — connect an AI provider in Settings for full coaching.';
+  // The offline engine can't judge conversational continuity or nuanced
+  // business judgement the way the AI-backed scoring does, so these are
+  // simpler, more generous defaults — clearly labelled as a rough guide via
+  // the note above, not a precise measurement.
+  listening = 2; commercialJudgement = 2;
   if(hiddenPain && outsideRole && strength>=threshold){
     reply = REFERRAL_RESPONSES[Math.floor(Math.random()*REFERRAL_RESPONSES.length)];
-    qualification='developing'; relevance=2;
+    qualification='developing'; relevance=2; infoLevel=4; roleFit=1; // asked outside the contact's role, but recognised well enough to still count as developing
     note = `Good, relevant question — but ${p.persona.role} likely isn't the person who owns this, so this is a moment to ask who is, or to reframe it in business terms they'd answer directly.`;
   }
-  else if(hiddenPain && strength>=threshold){ reply = "Actually, yes — " + hiddenPain.detail + "."; qualification='qualified'; relevance=3; }
-  else if(hiddenPain){ reply = HINTS[Math.floor(Math.random()*HINTS.length)]; qualification='developing'; relevance=2; }
-  else if(pieceId){ reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='surface'; relevance=1; }
-  else { reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='none'; relevance=0; }
-  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, note } };
+  else if(hiddenPain && strength>=threshold){ reply = "Actually, yes — " + hiddenPain.detail + "."; qualification='qualified'; relevance=3; infoLevel = strength>=3 ? 3 : 2; roleFit=3; }
+  else if(hiddenPain){ reply = HINTS[Math.floor(Math.random()*HINTS.length)]; qualification='developing'; relevance=2; infoLevel=1; roleFit=2; }
+  else if(pieceId){ reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='surface'; relevance=1; infoLevel=0; roleFit=2; }
+  else { reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='none'; relevance=0; infoLevel=0; roleFit=1; }
+  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, infoLevel, roleFit, listening, commercialJudgement, note } };
 }
 function detectPivot(turnScores){
   // Looks for a "none"/low-relevance turn on one piece followed later by a
@@ -3151,6 +3160,47 @@ function renderScorecard(data){
     nextStepWrap.classList.remove('hidden');
   } else {
     nextStepWrap.classList.add('hidden');
+  }
+
+  const INFO_LEVEL_LABELS = [
+    'Level 0 — No meaningful information uncovered',
+    'Level 1 — A general observation only',
+    'Level 2 — A specific, named problem',
+    'Level 3 — Operational or financial impact',
+    'Level 4 — Stakeholder, supplier, timing or decision detail',
+    'Level 5 — An agreed action or concrete next step'
+  ];
+  const infoLevels = Coach.turnScores.map(t=>t.infoLevel).filter(Number.isFinite);
+  const infoLevelWrap = el('#modal-infolevel-wrap');
+  if(infoLevels.length){
+    const deepest = Math.max(...infoLevels);
+    el('#modal-infolevel').textContent = INFO_LEVEL_LABELS[deepest] + ' — the deepest point this call actually reached.';
+    infoLevelWrap.classList.remove('hidden');
+  } else {
+    infoLevelWrap.classList.add('hidden');
+  }
+
+  const dimensionWrap = el('#modal-dimensions-wrap');
+  const dims = [
+    { key:'relevance', label:'Relevance', max:3 },
+    { key:'roleFit', label:'Role fit', max:3 },
+    { key:'listening', label:'Listening', max:3 },
+    { key:'commercialJudgement', label:'Commercial judgement', max:3 }
+  ];
+  const dimAverages = dims.map(d=>{
+    const vals = Coach.turnScores.map(t=>t[d.key]).filter(Number.isFinite);
+    return { ...d, avg: vals.length ? Math.round((vals.reduce((s,v)=>s+v,0)/vals.length)*10)/10 : null };
+  }).filter(d=>d.avg !== null);
+  if(dimAverages.length){
+    el('#modal-dimensions').innerHTML = dimAverages.map(d=>`
+      <div class="dim-row">
+        <span class="dim-label">${esc(d.label)}</span>
+        <div class="dim-bar"><div class="dim-bar-fill" style="width:${(d.avg/d.max)*100}%;"></div></div>
+        <span class="dim-score">${d.avg}/${d.max}</span>
+      </div>`).join('');
+    dimensionWrap.classList.remove('hidden');
+  } else {
+    dimensionWrap.classList.add('hidden');
   }
 }
 function openModal(){ el('#modal-backdrop').classList.add('show'); }
