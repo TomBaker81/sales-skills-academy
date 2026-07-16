@@ -482,6 +482,65 @@ function propensityAreasFor(industry, role, size){
   return Array.from(new Set([...fromIndustry, ...fromRole, ...fromSize]));
 }
 
+/* ---------- Broad discovery entry stage ----------
+   Before committing to a specific focus area, a real call usually opens with
+   broad, non-product-specific Situation/Problem questions — growth, cost,
+   risk, remote working, resilience — and the ANSWERS surface which areas are
+   actually worth exploring, rather than the rep guessing a product upfront.
+   Each theme's answers nudge relevance for particular focus areas; nothing
+   here forces a choice — it produces a recommendation, and the rep stays
+   free to pick any area regardless. */
+const BROAD_DISCOVERY_THEMES = [
+  {
+    key: 'growth',
+    q: "Has much changed for the business recently — new sites, more staff, new systems?",
+    options: [
+      { label: "Yes, growing fast — more people, more sites, more systems", boosts: ['connectivity-access','secure-network','cloud-infrastructure'] },
+      { label: "Not really, fairly steady", boosts: [] },
+      { label: "Actually scaling back or consolidating", boosts: ['support-services'] }
+    ]
+  },
+  {
+    key: 'cost',
+    q: "Are you actively looking to control or reduce spend on IT, phones or telecoms right now?",
+    options: [
+      { label: "Yes, actively reviewing costs", boosts: ['mobile-security','connectivity-access','cloud-voice'] },
+      { label: "Not a current focus", boosts: [] }
+    ]
+  },
+  {
+    key: 'risk',
+    q: "Has security or compliance come up recently — from a client, a regulator, or your own concern?",
+    options: [
+      { label: "Yes, genuinely on our radar", boosts: ['cyber-assurance','m365'] },
+      { label: "Not something we've really thought about", boosts: [] }
+    ]
+  },
+  {
+    key: 'remote',
+    q: "How much of the team works remotely, in the field, or across more than one site?",
+    options: [
+      { label: "A lot — remote, field-based, or multi-site", boosts: ['mobile-office','secure-access-edge','mobile-security'] },
+      { label: "Mostly everyone's in one office", boosts: [] }
+    ]
+  },
+  {
+    key: 'resilience',
+    q: "When something breaks with your tech, how well does that actually get handled?",
+    options: [
+      { label: "Not well — causes real disruption and delay", boosts: ['support-services','cloud-infrastructure'] },
+      { label: "Pretty well handled, not a pain point", boosts: [] }
+    ]
+  }
+];
+function computeBroadDiscoveryRecommendation(selectedBoosts){
+  // selectedBoosts: array of arrays of piece ids (one per answered theme)
+  const scores = {};
+  selectedBoosts.flat().forEach(pid => { scores[pid] = (scores[pid]||0) + 1; });
+  const ranked = Object.entries(scores).sort((a,b)=> b[1]-a[1]);
+  return { scores, top: ranked.length ? ranked[0][0] : null };
+}
+
 /* ---------- Role knowledge/ownership profiles ----------
    What a given contact role can plausibly discuss in depth, how to FRAME a
    question so it lands with them, and who they'd realistically defer to on
@@ -1624,10 +1683,16 @@ function beginPractice(){
 }
 function renderQualPicker(){
   const grid = el('#qual-picker-grid');
-  grid.innerHTML = PIECES.map(p=>{
+  const recommended = App.qual.broadDiscovery ? App.qual.broadDiscovery.recommendedPiece : null;
+  const orderedPieces = recommended
+    ? [PIECE_BY_ID[recommended], ...PIECES.filter(p=>p.id!==recommended)]
+    : PIECES;
+  grid.innerHTML = orderedPieces.map(p=>{
     const best = bestLevelForPiece(p.id);
     const badge = best ? `<span class="pc-status" style="background:${LEVELS[best.level].bg};color:${LEVELS[best.level].color};">${LEVELS[best.level].label}</span>` : '';
+    const recBadge = p.id === recommended ? `<span class="pc-recommended-badge">Recommended</span>` : '';
     return `<button class="piece-card" style="--accent:${p.color}" data-id="${p.id}">
+      ${recBadge}
       <div class="pc-icon">${p.icon}</div>
       <h3>${esc(p.name)}</h3>
       <p>${esc(p.blurb)}</p>
@@ -1636,6 +1701,54 @@ function renderQualPicker(){
   }).join('');
   els('#qual-picker-grid .piece-card').forEach(c=> c.addEventListener('click', ()=> startPiece(c.dataset.id)));
 }
+function renderBroadDiscoveryPanel(){
+  if(!App.qual.broadDiscovery) App.qual.broadDiscovery = { selections: {}, recommendedPiece: null };
+  const bd = App.qual.broadDiscovery;
+  const wrap = el('#broad-discovery-body');
+  wrap.innerHTML = `
+    <div class="broad-discovery-body">
+      <p style="font-size:13px;color:var(--ink-faint);margin:0 0 16px;">A few broad Situation/Problem questions to open with — no product names, just where the business might have real pressure. Answering these suggests which focus area to explore first; you can still pick any area regardless.</p>
+      ${BROAD_DISCOVERY_THEMES.map(theme=>`
+        <div class="bd-theme">
+          <h5>${esc(theme.q)}</h5>
+          <div class="bd-options">
+            ${theme.options.map((o,i)=>`<button class="bd-opt-btn ${bd.selections[theme.key]===i?'selected':''}" data-theme="${theme.key}" data-idx="${i}">${esc(o.label)}</button>`).join('')}
+          </div>
+        </div>`).join('')}
+      <div id="bd-recommendation"></div>
+    </div>`;
+  els('.bd-opt-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const themeKey = btn.dataset.theme;
+      const idx = Number(btn.dataset.idx);
+      bd.selections[themeKey] = bd.selections[themeKey] === idx ? undefined : idx; // click again to deselect
+      updateBroadDiscoveryRecommendation();
+      renderBroadDiscoveryPanel();
+    });
+  });
+  updateBroadDiscoveryRecommendation();
+}
+function updateBroadDiscoveryRecommendation(){
+  const bd = App.qual.broadDiscovery;
+  const selectedBoosts = BROAD_DISCOVERY_THEMES
+    .filter(t => bd.selections[t.key] !== undefined)
+    .map(t => t.options[bd.selections[t.key]].boosts);
+  const { top } = computeBroadDiscoveryRecommendation(selectedBoosts);
+  bd.recommendedPiece = top;
+  const recDiv = el('#bd-recommendation');
+  if(recDiv){
+    recDiv.innerHTML = top
+      ? `<div class="bd-recommendation">Based on your answers, <strong>${esc(PIECE_BY_ID[top].name)}</strong> looks like the strongest place to start — it's now highlighted first below. You're still free to pick any area.</div>`
+      : (Object.keys(bd.selections).some(k=>bd.selections[k]!==undefined) ? `<div class="bd-recommendation">Nothing strongly indicated yet — try answering a couple more, or just pick any focus area below.</div>` : '');
+  }
+  renderQualPicker();
+}
+el('#btn-toggle-broad-discovery').addEventListener('click', ()=>{
+  const body = el('#broad-discovery-body');
+  const isHidden = body.classList.contains('hidden');
+  body.classList.toggle('hidden');
+  if(isHidden) renderBroadDiscoveryPanel();
+});
 function renderQualHeader(){
   const piece = PIECE_BY_ID[App.qual.pieceId];
   const iconEl = el('#qh-icon');
