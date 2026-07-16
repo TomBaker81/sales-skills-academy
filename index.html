@@ -192,8 +192,17 @@
             <option value="">Any / Random</option>
           </select>
         </div>
+        <div>
+          <label for="scenario-difficulty-select" style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:5px;">Difficulty (optional)</label>
+          <select id="scenario-difficulty-select" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13.5px;box-sizing:border-box;background:#fff;">
+            <option value="">Any / Random</option>
+            <option value="warm">Guided</option>
+            <option value="brisk">Realistic</option>
+            <option value="dismissive">Challenging</option>
+          </select>
+        </div>
       </div>
-      <p style="max-width:460px;margin:0 auto 18px;font-size:12px;line-height:1.5;color:var(--ink-faint);">Picking an industry, contact role and/or size biases which focus areas are more likely to come up, and how the contact responds to questions outside their role — practice for propensity-led selling, not just random luck. This is a training heuristic based on general sales patterns, not verified market data. Leave on "Any / Random" for a fully random call.</p>
+      <p style="max-width:520px;margin:0 auto 18px;font-size:12px;line-height:1.5;color:var(--ink-faint);">Picking an industry, contact role, size and/or difficulty biases which focus areas are more likely to come up, how the contact responds to questions outside their role, and how hard the call is to work — practice for propensity-led selling, not just random luck. This is a training heuristic based on general sales patterns, not verified market data. Leave anything on "Any / Random" for a fully random call.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
         <button class="btn btn-primary" id="btn-new-scenario">Generate New Scenario →</button>
         <button class="btn btn-outline" id="btn-open-settings-2">⚙ AI Provider Settings</button>

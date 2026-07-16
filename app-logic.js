@@ -1455,6 +1455,12 @@ async function renderManagerReport(){
       ${Object.keys(STAGE_LABELS).map(k=>`<div title="${STAGE_LABELS[k]}: ${mix[k]}%" style="width:${mix[k]}%;background:${STAGE_COLORS[k]};"></div>`).join('')}
     </div>`;
 
+  const difficultyBreakdown = ['warm','brisk','dismissive'].map(diff=>{
+    const tierEntries = entries.filter(e => (e.difficulty || 'warm') === diff);
+    const avg = tierEntries.length ? Math.round(tierEntries.reduce((s,e)=>s+(e.score||0),0)/tierEntries.length) : null;
+    return { diff, tier: DIFFICULTY_TIER_INFO[diff], calls: tierEntries.length, avg };
+  });
+
   wrap.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px;">
       <div class="mgr-stat"><div class="mgr-stat-num">${entries.length}</div><div class="mgr-stat-label">Calls logged</div></div>
@@ -1462,6 +1468,16 @@ async function renderManagerReport(){
       <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgScore}/100</div><div class="mgr-stat-label">Team avg score</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgRelevance ?? '—'}/3</div><div class="mgr-stat-label">Avg question relevance</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${goodStagePct}%</div><div class="mgr-stat-label">Questions were Implication / Need-payoff</div></div>
+    </div>
+    <h4 style="font-size:13px;color:var(--navy);margin:0 0 10px;font-family:var(--font-head);">Performance by difficulty tier</h4>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:22px;">
+      ${difficultyBreakdown.map(d=>`
+        <div class="mgr-stat" style="text-align:left;">
+          <div style="font-weight:800;color:var(--navy);font-size:13px;margin-bottom:2px;">${d.tier.name}</div>
+          <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px;">${esc(d.tier.description)}</div>
+          <div class="mgr-stat-num" style="font-size:20px;">${d.avg !== null ? d.avg+'/100' : '—'}</div>
+          <div class="mgr-stat-label">${d.calls} call${d.calls===1?'':'s'}</div>
+        </div>`).join('')}
     </div>
     <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;">
       <div style="overflow-x:auto;">
@@ -2077,7 +2093,17 @@ function setModeBadge(mode){
   }
 }
 
-function pickDifficulty(){
+// Formal names for the three difficulty tiers, mapped onto the existing
+// warm/brisk/dismissive internal values (kept as-is internally since they're
+// already threaded through dozens of places — this is a labelling/selection
+// layer on top, not a data-model rename).
+const DIFFICULTY_TIER_INFO = {
+  warm: { name: 'Guided', description: 'Relevant pain is reasonably discoverable, good questions get constructive answers — built for building confidence.' },
+  brisk: { name: 'Realistic', description: 'Mixed priorities, some questions lead to dead ends, stakeholder boundaries apply — you need to listen and adapt.' },
+  dismissive: { name: 'Challenging', description: 'The contact may be guarded or sceptical, existing suppliers may seem satisfactory — progress depends on precise follow-up and commercial judgement.' }
+};
+function pickDifficulty(explicitChoice){
+  if(explicitChoice && DIFFICULTY_TIER_INFO[explicitChoice]) return explicitChoice;
   const r = Math.random();
   if(r < 0.70) return 'warm';       // most calls: friendly, forthcoming — good for building confidence
   if(r < 0.90) return 'brisk';      // some calls: businesslike, a bit short, has to be earned
@@ -2129,7 +2155,7 @@ async function newScenario(){
   stopListening();
   if(window.speechSynthesis) window.speechSynthesis.cancel();
 
-  const difficulty = pickDifficulty();
+  const difficulty = pickDifficulty(el('#scenario-difficulty-select') ? el('#scenario-difficulty-select').value : null);
   App.context.difficulty = difficulty;
   const selectedIndustry = App.context.industry;
   const selectedRole = App.context.contactRole;
@@ -2399,6 +2425,9 @@ function populateScenarioSelectors(){
   });
   el('#ctx-relationship-select').addEventListener('change', (e)=>{
     App.context.relationship = e.target.value;
+  });
+  el('#scenario-difficulty-select').addEventListener('change', (e)=>{
+    App.context.difficulty = e.target.value || 'warm';
   });
 }
 function syncContextSelectors(){
