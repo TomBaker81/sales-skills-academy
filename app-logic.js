@@ -1834,6 +1834,43 @@ function renderStepper(activeIdx){
     return `<div class="step ${cls}"><div class="sdot">${i<activeIdx?'✓':(i+1)}</div><div class="slabel">${s.label}</div><div class="sline"></div></div>`;
   }).join('');
 }
+// Evidence-led pivot state classification — rather than treating every
+// low-scoring result the same way ("no pain, go pivot"), this looks at
+// actual available evidence (does the contact own this area? do they
+// already have it from us? how far did discovery actually get?) to name a
+// more specific state and a correspondingly specific recommended action,
+// per the spec's state model. Built from signals already collected via the
+// shared context model, rather than needing to retag the entire tree.
+const PIVOT_STATES = {
+  'already-resolved': {
+    label: 'Issue already covered',
+    description: "They're already with us on this, so there's genuinely nothing to qualify here.",
+    action: 'Move to a related focus area, or check satisfaction/renewal timing on this one instead of treating it as a fresh opportunity.'
+  },
+  'wrong-stakeholder': {
+    label: "Wrong contact for this area",
+    description: "This contact doesn't own or plausibly know this area in depth — that's not the same as there being no issue.",
+    action: 'Reframe in business terms they can answer, or ask for an introduction to whoever actually owns this — don\u2019t keep pushing technical detail at the wrong person.'
+  },
+  'low-impact': {
+    label: 'Some signal, but low impact so far',
+    description: "There's a real answer here, it just hasn't been explored deeply enough yet to know if it's worth pursuing.",
+    action: 'Ask one more implication question before giving up on this area — "what would it cost you if..." often reveals more than the first pass did.'
+  },
+  'no-issue': {
+    label: 'Genuinely no issue here',
+    description: "Best evidence available says this area is a real dead end for this business right now.",
+    action: 'Pivot to a different, genuinely relevant focus area using a broad, open question — a real call rarely ends after one dead end.'
+  }
+};
+function classifyPivotState(pieceId, level, context){
+  context = context || App.context;
+  if(context.existingProducts && context.existingProducts.includes(pieceId)) return 'already-resolved';
+  if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)) return 'wrong-stakeholder';
+  if(level === 'surface') return 'low-impact';
+  return 'no-issue';
+}
+
 function renderQualNode(){
   const piece = PIECE_BY_ID[App.qual.pieceId];
   const node = piece.tree[App.qual.nodeId];
@@ -1845,9 +1882,12 @@ function renderQualNode(){
     const notesHtml = App.qual.notes.length ? `
         <h4>Additional context you gathered</h4>
         <ul>${App.qual.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>` : '';
-    const pivotHtml = node.level === 'none' ? `
+    const pivotEligible = node.level === 'none' || node.level === 'surface';
+    const pivotState = pivotEligible ? classifyPivotState(App.qual.pieceId, node.level, App.context) : null;
+    const pivotInfo = pivotState ? PIVOT_STATES[pivotState] : null;
+    const pivotHtml = pivotInfo ? `
         <div class="pivot-callout">
-          <strong>No pain here — this is exactly when to cross-sell.</strong> A real call rarely ends just because one area's a dead end. Broad, open Situation and Problem questions (rather than ones that only fit this focus area) are what let you naturally pivot into a different one instead of ending the call. Try a different focus area now, as if this were the same conversation continuing.
+          <strong>${esc(pivotInfo.label)}.</strong> ${esc(pivotInfo.description)} ${esc(pivotInfo.action)}
         </div>` : '';
     body.innerHTML = `
       <div class="result-card" style="background:${lv.bg};border-color:${lv.color}44;">
@@ -1863,13 +1903,13 @@ function renderQualNode(){
         ${pivotHtml}
         <div class="result-actions">
           <button class="btn btn-primary" id="btn-retry-piece">Try Different Answers</button>
-          ${node.level === 'none' ? `<button class="btn btn-primary" id="btn-pivot-piece">🔄 Cross-Sell: Pick a Different Focus Area</button>` : `<button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>`}
+          ${pivotEligible ? `<button class="btn btn-primary" id="btn-pivot-piece">🔄 Cross-Sell: Pick a Different Focus Area</button>` : `<button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>`}
           <button class="btn btn-ghost" id="btn-done-piece">Back to All Pieces</button>
         </div>
       </div>`;
     logResult(App.qual.pieceId, node.level);
     el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; App.qual.gatePassed=false; App.qual.revealedOption=null; renderQualNode(); });
-    if(node.level === 'none'){
+    if(pivotEligible){
       el('#btn-pivot-piece').addEventListener('click', ()=>{
         App.qual.pieceId = null;
         el('#qual-wrap').classList.add('hidden');
