@@ -448,38 +448,143 @@ const INDUSTRY_OPTIONS = [
 ];
 const CONTACT_ROLE_OPTIONS = ['Owner/Founder', 'IT Manager', 'Office Manager', 'Finance Director (C-level)', 'Operations Director (C-level)'];
 const ORG_SIZE_OPTIONS = ['Micro (under 10 staff)', 'Small (10–49 staff)', 'Medium (50–249 staff)'];
-const INDUSTRY_TOP_AREAS = {
-  'Hospitality (hotel, B&B, venue)': ['connectivity-access','cloud-voice','secure-network'],
-  'Professional services (legal, accountancy)': ['cyber-assurance','m365','secure-access-edge'],
-  'Healthcare practice': ['cyber-assurance','m365','mobile-security'],
-  'Retail (multi-site)': ['connectivity-access','mobile-security','m365'],
-  'Manufacturing': ['connectivity-access','secure-network','support-services'],
-  'Construction & trades': ['mobile-security','mobile-office','support-services'],
-  'Logistics & transport': ['mobile-security','cyber-assurance','secure-access-edge'],
-  'Creative / marketing agency': ['m365','mobile-office','secure-access-edge'],
-  'Property & facilities': ['mobile-security','cloud-infrastructure','support-services'],
-  'Food & beverage': ['connectivity-access','cloud-voice','support-services']
+
+// ---------- Auditable propensity/evidence model ----------
+// Each entry records not just WHICH area is likely relevant, but WHY:
+// a relevance score, confidence level, evidence type, and a plain-English
+// rationale a manager can actually inspect — rather than a hidden weighting
+// nobody can audit. evidenceType is always 'training heuristic' here since
+// there is no verified market research behind any of this; that's stated
+// explicitly rather than dressed up as data. lastReviewed lets a manager see
+// how stale a given assumption is.
+const REVIEWED = '2026-07';
+const INDUSTRY_PROPENSITY_EVIDENCE = {
+  'Hospitality (hotel, B&B, venue)': [
+    { piece:'connectivity-access', baseRelevance:0.85, confidence:'medium', evidenceType:'training heuristic', rationale:'Guest Wi-Fi and booking systems are core to day-to-day hospitality operations, so connectivity problems are highly visible and disruptive.', lastReviewed:REVIEWED },
+    { piece:'cloud-voice', baseRelevance:0.7, confidence:'medium', evidenceType:'training heuristic', rationale:'Phone-based bookings and guest calls remain common in smaller hospitality venues.', lastReviewed:REVIEWED },
+    { piece:'secure-network', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Guest and staff networks often share infrastructure without proper segmentation.', lastReviewed:REVIEWED }
+  ],
+  'Professional services (legal, accountancy)': [
+    { piece:'cyber-assurance', baseRelevance:0.85, confidence:'medium', evidenceType:'training heuristic', rationale:'Client confidentiality obligations make security governance a recurring concern in legal/accountancy practices.', lastReviewed:REVIEWED },
+    { piece:'m365', baseRelevance:0.75, confidence:'medium', evidenceType:'training heuristic', rationale:'Document-heavy client work is typically run through Microsoft 365; licensing/security gaps are common.', lastReviewed:REVIEWED },
+    { piece:'secure-access-edge', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Partners and staff often need secure access to client files outside the office.', lastReviewed:REVIEWED }
+  ],
+  'Healthcare practice': [
+    { piece:'cyber-assurance', baseRelevance:0.85, confidence:'medium', evidenceType:'training heuristic', rationale:'Patient data sensitivity makes security governance a recurring, visible concern for practice owners.', lastReviewed:REVIEWED },
+    { piece:'m365', baseRelevance:0.7, confidence:'medium', evidenceType:'training heuristic', rationale:'Appointment scheduling and admin commonly run through Microsoft 365.', lastReviewed:REVIEWED },
+    { piece:'mobile-security', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Clinical staff often use mobile devices for scheduling and communication.', lastReviewed:REVIEWED }
+  ],
+  'Retail (multi-site)': [
+    { piece:'connectivity-access', baseRelevance:0.8, confidence:'medium', evidenceType:'training heuristic', rationale:'Card payments and till systems depend directly on connectivity at every site.', lastReviewed:REVIEWED },
+    { piece:'mobile-security', baseRelevance:0.65, confidence:'low', evidenceType:'training heuristic', rationale:'Multi-site retail often issues staff mobiles for stock/comms with inconsistent management.', lastReviewed:REVIEWED },
+    { piece:'m365', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Head office admin and multi-site comms commonly run through Microsoft 365.', lastReviewed:REVIEWED }
+  ],
+  'Manufacturing': [
+    { piece:'connectivity-access', baseRelevance:0.7, confidence:'low', evidenceType:'training heuristic', rationale:'Production systems and office systems both depend on site connectivity.', lastReviewed:REVIEWED },
+    { piece:'secure-network', baseRelevance:0.65, confidence:'low', evidenceType:'training heuristic', rationale:'Shop-floor and office networks are often on one flat, unsegmented network.', lastReviewed:REVIEWED },
+    { piece:'support-services', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Production downtime from unresolved IT issues has direct, visible cost.', lastReviewed:REVIEWED }
+  ],
+  'Construction & trades': [
+    { piece:'mobile-security', baseRelevance:0.8, confidence:'medium', evidenceType:'training heuristic', rationale:'Field crews typically carry mobile devices for job sheets and site photos with little formal management.', lastReviewed:REVIEWED },
+    { piece:'mobile-office', baseRelevance:0.65, confidence:'low', evidenceType:'training heuristic', rationale:'Site-based, mobile-first working is the norm rather than a fixed office.', lastReviewed:REVIEWED },
+    { piece:'support-services', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Multiple live sites make a single, reliable point of contact for issues more valuable.', lastReviewed:REVIEWED }
+  ],
+  'Logistics & transport': [
+    { piece:'mobile-security', baseRelevance:0.8, confidence:'medium', evidenceType:'training heuristic', rationale:'Driver-facing mobile devices are core to daily operations and often poorly managed.', lastReviewed:REVIEWED },
+    { piece:'cyber-assurance', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Larger logistics customers increasingly ask suppliers for security assurance evidence.', lastReviewed:REVIEWED },
+    { piece:'secure-access-edge', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Dispatch and driver systems are frequently accessed remotely.', lastReviewed:REVIEWED }
+  ],
+  'Creative / marketing agency': [
+    { piece:'m365', baseRelevance:0.75, confidence:'medium', evidenceType:'training heuristic', rationale:'Client deliverables and collaboration are typically run through Microsoft 365.', lastReviewed:REVIEWED },
+    { piece:'mobile-office', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Agency staff commonly work flexibly/remotely around client deadlines.', lastReviewed:REVIEWED },
+    { piece:'secure-access-edge', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Remote access to client files/creative assets is routine in this sector.', lastReviewed:REVIEWED }
+  ],
+  'Property & facilities': [
+    { piece:'mobile-security', baseRelevance:0.7, confidence:'low', evidenceType:'training heuristic', rationale:'Facilities staff typically carry mobile devices across multiple properties.', lastReviewed:REVIEWED },
+    { piece:'cloud-infrastructure', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Tenant and maintenance records commonly need centralising across sites.', lastReviewed:REVIEWED },
+    { piece:'support-services', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Multiple properties needing attention raises the value of a single, reliable support contact.', lastReviewed:REVIEWED }
+  ],
+  'Food & beverage': [
+    { piece:'connectivity-access', baseRelevance:0.75, confidence:'medium', evidenceType:'training heuristic', rationale:'Ordering and payment systems depend directly on connectivity at busy service times.', lastReviewed:REVIEWED },
+    { piece:'cloud-voice', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Phone-based ordering/reservations remain common in food & beverage.', lastReviewed:REVIEWED },
+    { piece:'support-services', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Service disruption from unresolved tech issues has immediate, visible cost.', lastReviewed:REVIEWED }
+  ]
 };
-const ROLE_TOP_AREAS = {
-  'IT Manager': ['m365','cyber-assurance','secure-network'],
-  'Finance Director (C-level)': ['cyber-assurance','connectivity-access','cloud-infrastructure'],
-  'Operations Director (C-level)': ['mobile-security','mobile-office','support-services'],
-  'Office Manager': ['m365','support-services','connectivity-access'],
-  'Owner/Founder': ['mobile-security','connectivity-access','cyber-assurance']
+const ROLE_PROPENSITY_EVIDENCE = {
+  'IT Manager': [
+    { piece:'m365', baseRelevance:0.8, confidence:'high', evidenceType:'training heuristic', rationale:'Directly owns Microsoft 365 configuration and security as part of their role.', lastReviewed:REVIEWED },
+    { piece:'cyber-assurance', baseRelevance:0.75, confidence:'high', evidenceType:'training heuristic', rationale:'Security governance is typically within an IT Manager\u2019s direct remit.', lastReviewed:REVIEWED },
+    { piece:'secure-network', baseRelevance:0.7, confidence:'high', evidenceType:'training heuristic', rationale:'Network infrastructure is core, hands-on IT Manager territory.', lastReviewed:REVIEWED }
+  ],
+  'Finance Director (C-level)': [
+    { piece:'cyber-assurance', baseRelevance:0.65, confidence:'medium', evidenceType:'training heuristic', rationale:'Security risk and its cost implications sit within financial risk oversight.', lastReviewed:REVIEWED },
+    { piece:'connectivity-access', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Recurring connectivity/telecoms spend is a natural cost-review target for a Finance Director.', lastReviewed:REVIEWED },
+    { piece:'cloud-infrastructure', baseRelevance:0.5, confidence:'low', evidenceType:'training heuristic', rationale:'Infrastructure spend and depreciation decisions typically involve finance sign-off.', lastReviewed:REVIEWED }
+  ],
+  'Operations Director (C-level)': [
+    { piece:'mobile-security', baseRelevance:0.7, confidence:'medium', evidenceType:'training heuristic', rationale:'Field/operational device management directly affects day-to-day operational risk.', lastReviewed:REVIEWED },
+    { piece:'mobile-office', baseRelevance:0.6, confidence:'medium', evidenceType:'training heuristic', rationale:'Remote/field team productivity is a core operational concern.', lastReviewed:REVIEWED },
+    { piece:'support-services', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Operational downtime from unresolved IT issues is a direct operations concern.', lastReviewed:REVIEWED }
+  ],
+  'Office Manager': [
+    { piece:'m365', baseRelevance:0.65, confidence:'medium', evidenceType:'training heuristic', rationale:'Day-to-day Microsoft 365 user issues typically land with the Office Manager.', lastReviewed:REVIEWED },
+    { piece:'support-services', baseRelevance:0.6, confidence:'medium', evidenceType:'training heuristic', rationale:'Office Managers are commonly the first point of contact when something breaks.', lastReviewed:REVIEWED },
+    { piece:'connectivity-access', baseRelevance:0.5, confidence:'low', evidenceType:'training heuristic', rationale:'Day-to-day connectivity complaints are often reported to the Office Manager first.', lastReviewed:REVIEWED }
+  ],
+  'Owner/Founder': [
+    { piece:'mobile-security', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Owners of smaller businesses often personally handle mobile contract/device decisions.', lastReviewed:REVIEWED },
+    { piece:'connectivity-access', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Connectivity cost/reliability is a visible, owner-level concern in smaller businesses.', lastReviewed:REVIEWED },
+    { piece:'cyber-assurance', baseRelevance:0.5, confidence:'low', evidenceType:'training heuristic', rationale:'Security risk ultimately sits with the owner even if day-to-day management doesn\u2019t.', lastReviewed:REVIEWED }
+  ]
 };
 // Larger SMEs more plausibly face formal governance pressure (NIS2-style, a
 // named customer/partner asking for evidence); smaller ones more plausibly
 // have straightforward, tangible gaps (device management, basic connectivity).
-const SIZE_TOP_AREAS = {
-  'Micro (under 10 staff)': ['mobile-security','connectivity-access'],
-  'Small (10–49 staff)': ['mobile-security','m365','connectivity-access'],
-  'Medium (50–249 staff)': ['cyber-assurance','m365','secure-access-edge']
+const SIZE_PROPENSITY_EVIDENCE = {
+  'Micro (under 10 staff)': [
+    { piece:'mobile-security', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Very small businesses typically have simple, tangible device-management gaps rather than formal governance needs.', lastReviewed:REVIEWED },
+    { piece:'connectivity-access', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Basic connectivity reliability is usually the most visible pain point at this size.', lastReviewed:REVIEWED }
+  ],
+  'Small (10–49 staff)': [
+    { piece:'mobile-security', baseRelevance:0.6, confidence:'low', evidenceType:'training heuristic', rationale:'Growing device counts at this size commonly outpace informal management.', lastReviewed:REVIEWED },
+    { piece:'m365', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Licensing and security settings are often never revisited after initial setup at this size.', lastReviewed:REVIEWED },
+    { piece:'connectivity-access', baseRelevance:0.5, confidence:'low', evidenceType:'training heuristic', rationale:'Staff growth commonly outpaces original connectivity provisioning.', lastReviewed:REVIEWED }
+  ],
+  'Medium (50–249 staff)': [
+    { piece:'cyber-assurance', baseRelevance:0.65, confidence:'medium', evidenceType:'training heuristic', rationale:'This band aligns with NIS2\u2019s lower \u201cimportant entity\u201d threshold, making formal governance pressure more plausible.', lastReviewed:REVIEWED },
+    { piece:'m365', baseRelevance:0.55, confidence:'low', evidenceType:'training heuristic', rationale:'Larger user bases increase the practical impact of licensing/security gaps.', lastReviewed:REVIEWED },
+    { piece:'secure-access-edge', baseRelevance:0.5, confidence:'low', evidenceType:'training heuristic', rationale:'More staff and likely more sites raises the value of consistent secure access policy.', lastReviewed:REVIEWED }
+  ]
 };
+const INDUSTRY_TOP_AREAS = Object.fromEntries(Object.entries(INDUSTRY_PROPENSITY_EVIDENCE).map(([k,v])=>[k, v.map(e=>e.piece)]));
+const ROLE_TOP_AREAS = Object.fromEntries(Object.entries(ROLE_PROPENSITY_EVIDENCE).map(([k,v])=>[k, v.map(e=>e.piece)]));
+const SIZE_TOP_AREAS = Object.fromEntries(Object.entries(SIZE_PROPENSITY_EVIDENCE).map(([k,v])=>[k, v.map(e=>e.piece)]));
 function propensityAreasFor(industry, role, size){
   const fromIndustry = INDUSTRY_TOP_AREAS[industry] || [];
   const fromRole = ROLE_TOP_AREAS[role] || [];
   const fromSize = SIZE_TOP_AREAS[size] || [];
   return Array.from(new Set([...fromIndustry, ...fromRole, ...fromSize]));
+}
+// Full auditable evidence for a given context — used by the manager-facing
+// rationale view, and to build the learner-facing "why is this suggested"
+// explanation. Combines industry/role/size evidence where more than one
+// applies to the same piece, taking the highest relevance and noting all
+// contributing sources.
+function propensityEvidenceFor(industry, role, size){
+  const sources = [
+    ['industry', INDUSTRY_PROPENSITY_EVIDENCE[industry] || []],
+    ['role', ROLE_PROPENSITY_EVIDENCE[role] || []],
+    ['size', SIZE_PROPENSITY_EVIDENCE[size] || []]
+  ];
+  const byPiece = {};
+  sources.forEach(([sourceType, entries])=>{
+    entries.forEach(e=>{
+      if(!byPiece[e.piece]) byPiece[e.piece] = { piece:e.piece, maxRelevance:0, contributions:[] };
+      byPiece[e.piece].maxRelevance = Math.max(byPiece[e.piece].maxRelevance, e.baseRelevance);
+      byPiece[e.piece].contributions.push({ sourceType, ...e });
+    });
+  });
+  return Object.values(byPiece).sort((a,b)=> b.maxRelevance - a.maxRelevance);
 }
 
 /* ---------- Broad discovery entry stage ----------
@@ -1525,7 +1630,25 @@ async function renderManagerReport(){
       </table>
       </div>
     </div>
-    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each SPIN stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>`;
+    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each SPIN stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>
+    <div class="mgr-rationale-section">
+      <h4 style="font-size:13px;color:var(--navy);margin:24px 0 6px;font-family:var(--font-head);">Propensity model rationale (auditable)</h4>
+      <p style="font-size:12px;color:var(--ink-faint);margin:0 0 12px;">Pick a combination to see exactly why the system suggests certain focus areas for it — every score below is a training heuristic, not verified market data. Confidence reflects how directly the reasoning applies, not statistical certainty.</p>
+      <div class="context-panel-grid" style="margin-bottom:14px;">
+        <div><label>Industry</label><select id="rationale-industry-select"><option value="">Any</option></select></div>
+        <div><label>Role</label><select id="rationale-role-select"><option value="">Any</option></select></div>
+        <div><label>Org size</label><select id="rationale-size-select"><option value="">Any</option></select></div>
+      </div>
+      <div id="rationale-output"></div>
+    </div>`;
+
+  ['rationale-industry-select','rationale-role-select','rationale-size-select'].forEach((id, i)=>{
+    const opts = [INDUSTRY_OPTIONS, CONTACT_ROLE_OPTIONS, ORG_SIZE_OPTIONS][i];
+    const sel = el('#'+id);
+    opts.forEach(o=>{ sel.innerHTML += `<option value="${esc(o)}">${esc(o)}</option>`; });
+    sel.addEventListener('change', renderPropensityRationale);
+  });
+  renderPropensityRationale();
 
   els('.mgr-rep-row').forEach(row=>{
     row.addEventListener('click', ()=>{
@@ -1548,6 +1671,39 @@ async function renderManagerReport(){
       }
     });
   });
+}
+function renderPropensityRationale(){
+  const industry = el('#rationale-industry-select').value || null;
+  const role = el('#rationale-role-select').value || null;
+  const size = el('#rationale-size-select').value || null;
+  const evidence = propensityEvidenceFor(industry, role, size);
+  const out = el('#rationale-output');
+  if(!evidence.length){
+    out.innerHTML = `<p style="font-size:13px;color:var(--ink-faint);">Pick at least one of industry, role or size above to see the evidence behind it.</p>`;
+    return;
+  }
+  out.innerHTML = `
+    <div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;">
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px;">
+        <tr style="background:var(--navy);color:#fff;text-align:left;">
+          <th style="padding:8px 12px;">Focus area</th>
+          <th style="padding:8px 12px;">Relevance</th>
+          <th style="padding:8px 12px;">Confidence</th>
+          <th style="padding:8px 12px;">Evidence &amp; rationale</th>
+          <th style="padding:8px 12px;">Last reviewed</th>
+        </tr>
+        ${evidence.map(e=>`
+        <tr style="border-top:1px solid var(--line);vertical-align:top;">
+          <td style="padding:8px 12px;font-weight:700;color:var(--navy);">${esc(PIECE_BY_ID[e.piece].name)}</td>
+          <td style="padding:8px 12px;">${Math.round(e.maxRelevance*100)}%</td>
+          <td style="padding:8px 12px;">${e.contributions.map(c=>esc(c.confidence)).join(', ')}</td>
+          <td style="padding:8px 12px;color:var(--ink-soft);">${e.contributions.map(c=>`<div style="margin-bottom:4px;"><strong>[${esc(c.sourceType)}]</strong> ${esc(c.rationale)} <em>(${esc(c.evidenceType)})</em></div>`).join('')}</td>
+          <td style="padding:8px 12px;color:var(--ink-faint);">${esc(e.contributions[0].lastReviewed)}</td>
+        </tr>`).join('')}
+      </table>
+      </div>
+    </div>`;
 }
 const STAGE_COLORS = {situation:'#B9791F', problem:'#D98A3D', implication:'#01C088', needpayoff:'#00996C', closed:'#B54A38', other:'#8B8F99'};
 
