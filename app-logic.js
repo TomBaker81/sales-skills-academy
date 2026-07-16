@@ -520,14 +520,123 @@ function roleOwnsPiece(role, pieceId){
   return profile.strongAreas.includes(pieceId);
 }
 
+// ---------- Industry context variables ----------
+// A small, reusable set of variables per industry, substituted into
+// per-piece, per-stage question TEMPLATES below — rather than one generic
+// clause tacked onto every question regardless of stage, each SPIN stage
+// gets its own natural sentence using these variables in a different
+// position, so the industry grounding actually varies through a call
+// instead of repeating the same tacked-on phrase four times in a row.
+const INDUSTRY_CONTEXT = {
+  'Hospitality (hotel, B&B, venue)': { asset:'guest Wi-Fi and booking systems', peakTime:'check-in rushes or fully-booked weekends', concern:'guest reviews and repeat bookings', stakeholder:'the general manager' },
+  'Professional services (legal, accountancy)': { asset:'client files and case records', peakTime:'deadline periods or year-end', concern:'client trust and confidentiality', stakeholder:'a senior partner' },
+  'Healthcare practice': { asset:'patient records and appointment scheduling', peakTime:'busy clinic hours', concern:'patient care and compliance', stakeholder:'a GP partner' },
+  'Retail (multi-site)': { asset:'till systems and stock records', peakTime:'busy trading periods or sales events', concern:'customer experience and lost sales', stakeholder:'the area manager' },
+  'Manufacturing': { asset:'production line systems', peakTime:'peak production runs', concern:'output and missed deadlines', stakeholder:'the operations manager' },
+  'Construction & trades': { asset:'site communications and job scheduling', peakTime:'having several live sites running at once', concern:'project delays and site safety', stakeholder:'the site manager' },
+  'Logistics & transport': { asset:'driver communications and delivery scheduling', peakTime:'peak delivery periods', concern:'on-time delivery and driver safety', stakeholder:'the fleet manager' },
+  'Creative / marketing agency': { asset:'client deliverables and creative files', peakTime:'tight client deadlines', concern:'client relationships and reputation', stakeholder:'the account director' },
+  'Property & facilities': { asset:'tenant and maintenance records', peakTime:'having several properties needing attention at once', concern:'tenant satisfaction and compliance', stakeholder:'the facilities manager' },
+  'Food & beverage': { asset:'ordering and payment systems', peakTime:'busy service periods', concern:'service speed and customer experience', stakeholder:'the general manager' }
+};
+// Generic fallback variables used when no industry is selected, so the
+// templates below still read naturally rather than showing a blank/broken
+// placeholder — this is what "Any / Random" degrades to.
+const GENERIC_CONTEXT_VARS = { asset:'the key systems', peakTime:'busy periods', concern:'the business', stakeholder:'whoever owns that decision' };
+
+// ---------- Per-piece, per-stage question templates ----------
+// One template per focus area per SPIN stage (40 total), each using the
+// industry variables above in a different sentence position — this is the
+// "reusable content architecture" approach: a small number of templates
+// combined with a small number of variable sets produces genuine variety
+// without needing a bespoke hand-written question for every single
+// industry/piece/stage combination (which would be 400+ sentences).
+const PIECE_STAGE_TEMPLATES = {
+  'mobile-security': {
+    situation: "How are staff mobiles handled today, especially with {asset} involved?",
+    problem: "Has anything ever gone wrong with a phone during {peakTime} that caused a real scramble?",
+    implication: "If a phone went missing with {asset} on it, what would that actually mean for {concern}?",
+    needpayoff: "If those devices were properly protected, would that give you real peace of mind around {concern}?"
+  },
+  'connectivity-access': {
+    situation: "How's your internet holding up day to day, especially with {asset} running through it?",
+    problem: "Has the connection ever let you down during {peakTime}?",
+    implication: "When that happens, what does it actually cost you in terms of {concern}?",
+    needpayoff: "If we could keep that up and running even during {peakTime}, would that be worth sorting?"
+  },
+  'cyber-assurance': {
+    situation: "How does security get managed day to day, particularly around {asset}?",
+    problem: "If something went wrong with {asset} during {peakTime}, is there an actual plan, or would it be worked out on the fly?",
+    implication: "What would a real incident involving {asset} actually cost you, in terms of {concern}?",
+    needpayoff: "If you could show {stakeholder} a genuine, credible security plan, would that help with {concern}?"
+  },
+  'm365': {
+    situation: "How's Microsoft 365 set up today, especially around {asset}?",
+    problem: "Has anyone had a scare with a login or an email, particularly around {peakTime}?",
+    implication: "If someone's account got compromised, what would that actually mean for {asset}, and for {concern}?",
+    needpayoff: "If we tightened that up properly, would that give you confidence around {concern}?"
+  },
+  'secure-network': {
+    situation: "Tell me about your network and Wi-Fi — how's it holding up given {asset} runs across it?",
+    problem: "Any network problems specifically during {peakTime}?",
+    implication: "If that went down during {peakTime}, what would it cost you in {concern}?",
+    needpayoff: "If we made that faster and properly secured, would that help protect {concern}?"
+  },
+  'mobile-office': {
+    situation: "How much of the team works outside the office, and how does that affect access to {asset}?",
+    problem: "Do they ever struggle to access what they need, especially during {peakTime}?",
+    implication: "What does that friction actually cost you, in terms of {concern}?",
+    needpayoff: "If everyone could work securely from anywhere, would that help protect {concern}?"
+  },
+  'cloud-voice': {
+    situation: "How are you handling voice and calls today, especially with {asset} involved?",
+    problem: "Are you still on the old ISDN or PSTN lines, and have you thought about what happens during {peakTime} if they go down?",
+    implication: "If those lines went down during {peakTime}, what would that actually mean for {concern}?",
+    needpayoff: "If we mapped a move to VoIP well ahead of the switch-off, would that protect {concern}?"
+  },
+  'cloud-infrastructure': {
+    situation: "Where do your systems actually run today, especially anything to do with {asset}?",
+    problem: "Has your backup ever actually been tested, particularly for {asset}?",
+    implication: "If you lost access to {asset} tomorrow, what would that mean for {concern}?",
+    needpayoff: "If that was properly backed up and tested, would that help protect {concern}?"
+  },
+  'support-services': {
+    situation: "When something breaks, what actually happens, especially during {peakTime}?",
+    problem: "Has there been a time recently where something took too long to fix, particularly during {peakTime}?",
+    implication: "What does that delay actually cost you, in terms of {concern}?",
+    needpayoff: "If you had one number to call with a guaranteed response time, would that help protect {concern}?"
+  },
+  'secure-access-edge': {
+    situation: "Do you have staff or sites connecting from outside the office, especially around {asset}?",
+    problem: "How are they connecting today, particularly during {peakTime}?",
+    implication: "If someone accessed things insecurely, what would that mean for {concern}?",
+    needpayoff: "If everyone could connect safely from anywhere, would that help protect {concern}?"
+  }
+};
+function fillTemplate(template, vars){
+  return template.replace(/\{(\w+)\}/g, (m,k)=> vars[k] || m);
+}
+
+// Role-based framing add-ons — applied only at Problem/Implication stages
+// (where cost/impact framing matters most) when the contact DOES own this
+// piece, so the same "owns it" question still sounds a little different for
+// a Finance Director versus an Operations Director rather than being
+// identical for every role once ownership is confirmed.
+const ROLE_FRAMING_SUFFIX = {
+  'Finance Director (C-level)': { problem: null, implication: " — roughly what would that come to?" },
+  'Operations Director (C-level)': { problem: null, implication: " — and how much would that actually disrupt day-to-day operations?" },
+  'Owner/Founder': { problem: null, implication: " — thinking about it purely in terms of risk and cost?" },
+  'IT Manager': { problem: null, implication: null },
+  'Office Manager': { problem: null, implication: null }
+};
+
 // Applies the current context to a base question, per the spec's "reusable
 // content architecture": core question + industry modifier + role modifier +
-// existing-product modifier, assembled at render time rather than needing a
-// bespoke pre-written question for every industry/role/size/product
-// combination (which would mean thousands of hand-authored variants).
-function contextualiseQuestion(baseQ, pieceId, context){
+// existing-product modifier, assembled at render time from a small set of
+// templates and variables rather than needing a bespoke pre-written
+// question for every industry/role/size/product combination.
+function contextualiseQuestion(baseQ, pieceId, context, stage){
   context = context || App.context;
-  let q = baseQ;
   // Existing-product modifier: if they already have this piece from us, the
   // question should be about satisfaction/renewal, not "do you have this at
   // all" — a fundamentally different (and much more natural) question.
@@ -535,37 +644,25 @@ function contextualiseQuestion(baseQ, pieceId, context){
     return `Since you're already with us on this — how's that actually working out day to day, and is it still the right fit as you've grown?`;
   }
   // Role modifier: if the selected contact's role wouldn't plausibly own or
-  // discuss this piece in depth, prefix the question with a soft, natural
-  // check that surfaces the ownership question itself, rather than
-  // assuming a Finance Director can discuss firewall configuration.
+  // discuss this piece in depth, don't ask the technical version at all —
+  // surface the ownership question itself instead of assuming, say, a
+  // Finance Director can discuss firewall configuration.
   if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)){
-    const profile = ROLE_KNOWLEDGE_PROFILE[context.contactRole];
-    q = `${q} — or if that's more your IT/technical side, who'd usually own that conversation?`;
-    return q;
+    return `${baseQ} — or if that's more your IT/technical side, who'd usually own that conversation?`;
   }
-  // Industry modifier: ground the question in a plausible, natural business
-  // reference for the selected industry rather than a generic phrasing.
-  if(context.industry){
-    const tag = INDUSTRY_QUESTION_TAGS[context.industry];
-    if(tag) q = `${q} ${tag}`;
+  // Build from the per-piece, per-stage template (falling back to the
+  // original base question if this piece/stage has no template defined,
+  // e.g. the "choice" follow-up nodes, which aren't stage-typed the same way).
+  const template = stage && PIECE_STAGE_TEMPLATES[pieceId] && PIECE_STAGE_TEMPLATES[pieceId][stage];
+  let q = template ? fillTemplate(template, INDUSTRY_CONTEXT[context.industry] || GENERIC_CONTEXT_VARS) : baseQ;
+  // Role framing add-on (only when the role DOES own this piece — the
+  // no-ownership case already returned above).
+  if(context.contactRole && (stage==='problem' || stage==='implication')){
+    const suffix = ROLE_FRAMING_SUFFIX[context.contactRole] && ROLE_FRAMING_SUFFIX[context.contactRole][stage];
+    if(suffix) q = q + suffix;
   }
   return q;
 }
-// Short, natural clauses appended to ground a question in the selected
-// industry — deliberately light-touch (a phrase, not a rewrite) so it reads
-// as a real person's follow-up rather than an obviously templated insert.
-const INDUSTRY_QUESTION_TAGS = {
-  'Hospitality (hotel, B&B, venue)': "— especially with guests or bookings involved?",
-  'Professional services (legal, accountancy)': "— particularly with client files involved?",
-  'Healthcare practice': "— particularly with patient records involved?",
-  'Retail (multi-site)': "— across all your stores, or does it vary site to site?",
-  'Manufacturing': "— on the shop floor as well as the office?",
-  'Construction & trades': "— out on site as well as in the office?",
-  'Logistics & transport': "— out with drivers and vehicles as well as in the office?",
-  'Creative / marketing agency': "— particularly with client deliverables involved?",
-  'Property & facilities': "— across all your sites?",
-  'Food & beverage': "— especially at busy service times?"
-};
 const ROLE_KNOWLEDGE_PROFILE = {
   'Owner/Founder': {
     framing: 'business risk, growth, cost and reputation — not technical detail',
@@ -1652,7 +1749,7 @@ function renderQualNode(){
     renderStepper(stepIdx);
     const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
     const badgeLabel = badgeLabels[node.type] || '';
-    const contextualQ = contextualiseQuestion(node.q, App.qual.pieceId, App.context);
+    const contextualQ = contextualiseQuestion(node.q, App.qual.pieceId, App.context, node.type);
 
     if(!App.qual.gatePassed){
       if(!App.qual._gateChoices || App.qual._gateChoices.pieceId !== App.qual.pieceId || App.qual._gateChoices.nodeId !== App.qual.nodeId){
