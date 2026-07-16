@@ -488,6 +488,84 @@ function propensityAreasFor(industry, role, size){
    something outside their lane. Used to keep the AI persona's responses
    believable (an Office Manager shouldn't casually discuss firewall
    configuration) and to guide business-appropriate question framing. */
+/* =========================================================================
+   SHARED CUSTOMER-CONTEXT MODEL
+   One structured context object used consistently by Focus Area Playbooks
+   AND Virtual Sales Call — both read from and write to the same App.context,
+   so a rep's industry/role/size choice means the same thing and drives the
+   same downstream behaviour in either place, rather than each screen having
+   its own separate, potentially-inconsistent selection logic.
+   ========================================================================= */
+function freshCustomerContext(){
+  return {
+    industry: null,            // one of INDUSTRY_OPTIONS, or null = any/random
+    contactRole: null,         // one of CONTACT_ROLE_OPTIONS, or null
+    orgSize: null,             // one of ORG_SIZE_OPTIONS, or null
+    relationship: 'prospect',  // 'prospect' | 'existing-customer'
+    existingProducts: [],      // array of piece ids they already have from us
+    incumbentSupplier: '',     // free text, optional — e.g. "a different mobile provider"
+    focusArea: null,           // selected piece id for Focus Area Playbooks
+    difficulty: 'warm'         // 'warm'≈Guided, 'brisk'≈Realistic, 'dismissive'≈Challenging
+  };
+}
+App.context = freshCustomerContext();
+
+// Given a role, what they can plausibly discuss/own for a SPECIFIC piece —
+// reuses the same ROLE_KNOWLEDGE_PROFILE data that drives Virtual Sales
+// Call persona behaviour, so "can this contact answer this" means the same
+// thing in both places.
+function roleOwnsPiece(role, pieceId){
+  const profile = ROLE_KNOWLEDGE_PROFILE[role];
+  if(!profile) return true; // no role selected = assume anyone can discuss it
+  return profile.strongAreas.includes(pieceId);
+}
+
+// Applies the current context to a base question, per the spec's "reusable
+// content architecture": core question + industry modifier + role modifier +
+// existing-product modifier, assembled at render time rather than needing a
+// bespoke pre-written question for every industry/role/size/product
+// combination (which would mean thousands of hand-authored variants).
+function contextualiseQuestion(baseQ, pieceId, context){
+  context = context || App.context;
+  let q = baseQ;
+  // Existing-product modifier: if they already have this piece from us, the
+  // question should be about satisfaction/renewal, not "do you have this at
+  // all" — a fundamentally different (and much more natural) question.
+  if(context.existingProducts && context.existingProducts.includes(pieceId)){
+    return `Since you're already with us on this — how's that actually working out day to day, and is it still the right fit as you've grown?`;
+  }
+  // Role modifier: if the selected contact's role wouldn't plausibly own or
+  // discuss this piece in depth, prefix the question with a soft, natural
+  // check that surfaces the ownership question itself, rather than
+  // assuming a Finance Director can discuss firewall configuration.
+  if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)){
+    const profile = ROLE_KNOWLEDGE_PROFILE[context.contactRole];
+    q = `${q} — or if that's more your IT/technical side, who'd usually own that conversation?`;
+    return q;
+  }
+  // Industry modifier: ground the question in a plausible, natural business
+  // reference for the selected industry rather than a generic phrasing.
+  if(context.industry){
+    const tag = INDUSTRY_QUESTION_TAGS[context.industry];
+    if(tag) q = `${q} ${tag}`;
+  }
+  return q;
+}
+// Short, natural clauses appended to ground a question in the selected
+// industry — deliberately light-touch (a phrase, not a rewrite) so it reads
+// as a real person's follow-up rather than an obviously templated insert.
+const INDUSTRY_QUESTION_TAGS = {
+  'Hospitality (hotel, B&B, venue)': "— especially with guests or bookings involved?",
+  'Professional services (legal, accountancy)': "— particularly with client files involved?",
+  'Healthcare practice': "— particularly with patient records involved?",
+  'Retail (multi-site)': "— across all your stores, or does it vary site to site?",
+  'Manufacturing': "— on the shop floor as well as the office?",
+  'Construction & trades': "— out on site as well as in the office?",
+  'Logistics & transport': "— out with drivers and vehicles as well as in the office?",
+  'Creative / marketing agency': "— particularly with client deliverables involved?",
+  'Property & facilities': "— across all your sites?",
+  'Food & beverage': "— especially at busy service times?"
+};
 const ROLE_KNOWLEDGE_PROFILE = {
   'Owner/Founder': {
     framing: 'business risk, growth, cost and reputation — not technical detail',
@@ -1574,13 +1652,14 @@ function renderQualNode(){
     renderStepper(stepIdx);
     const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
     const badgeLabel = badgeLabels[node.type] || '';
+    const contextualQ = contextualiseQuestion(node.q, App.qual.pieceId, App.context);
 
     if(!App.qual.gatePassed){
       if(!App.qual._gateChoices || App.qual._gateChoices.pieceId !== App.qual.pieceId || App.qual._gateChoices.nodeId !== App.qual.nodeId){
         const stageDistractors = piece.distractorQuestions && piece.distractorQuestions[node.type];
         const pieceDistractors = (stageDistractors && stageDistractors.length) ? stageDistractors : DISTRACTOR_QUESTIONS;
         const distractors = pieceDistractors.slice().sort(()=> Math.random()-0.5).slice(0,3).map(d=>({text:d.text, note:d.note, correct:false}));
-        const correctChoice = {text:node.q, note:null, correct:true};
+        const correctChoice = {text:contextualQ, note:null, correct:true};
         const all = [...distractors, correctChoice].sort(()=> Math.random()-0.5);
         App.qual._gateChoices = { pieceId: App.qual.pieceId, nodeId: App.qual.nodeId, choices: all };
       }
@@ -1611,7 +1690,7 @@ function renderQualNode(){
       body.innerHTML = `
         <div class="qcard">
           <div class="qtype-row"><span class="qtype-badge ${node.type}">${badgeLabel}</span></div>
-          <h3>${esc(node.q)}</h3>
+          <h3>${esc(contextualQ)}</h3>
           <div class="customer-answer">
             <span class="ca-label">Customer says</span>
             <p>${esc(revealed.label)}</p>
@@ -1804,9 +1883,10 @@ async function newScenario(){
   if(window.speechSynthesis) window.speechSynthesis.cancel();
 
   const difficulty = pickDifficulty();
-  const selectedIndustry = el('#scenario-industry-select').value || null;
-  const selectedRole = el('#scenario-role-select').value || null;
-  const selectedSize = el('#scenario-size-select').value || null;
+  App.context.difficulty = difficulty;
+  const selectedIndustry = App.context.industry;
+  const selectedRole = App.context.contactRole;
+  const selectedSize = App.context.orgSize;
   let profile = null, mode = 'ai';
   if(!Settings.apiKey){
     mode = 'offline';
@@ -2055,12 +2135,37 @@ function stopListening(){
 initVoiceFeatures();
 Leaderboard.init();
 function populateScenarioSelectors(){
-  const indSel = el('#scenario-industry-select');
-  const roleSel = el('#scenario-role-select');
-  const sizeSel = el('#scenario-size-select');
-  INDUSTRY_OPTIONS.forEach(ind => { indSel.innerHTML += `<option value="${esc(ind)}">${esc(ind)}</option>`; });
-  CONTACT_ROLE_OPTIONS.forEach(r => { roleSel.innerHTML += `<option value="${esc(r)}">${esc(r)}</option>`; });
-  ORG_SIZE_OPTIONS.forEach(s => { sizeSel.innerHTML += `<option value="${esc(s)}">${esc(s)}</option>`; });
+  const pairs = [
+    ['#scenario-industry-select', '#ctx-industry-select', INDUSTRY_OPTIONS, 'industry'],
+    ['#scenario-role-select', '#ctx-role-select', CONTACT_ROLE_OPTIONS, 'contactRole'],
+    ['#scenario-size-select', '#ctx-size-select', ORG_SIZE_OPTIONS, 'orgSize']
+  ];
+  pairs.forEach(([vscId, pbId, options, contextKey])=>{
+    [vscId, pbId].forEach(id=>{
+      const sel = el(id);
+      options.forEach(opt => { sel.innerHTML += `<option value="${esc(opt)}">${esc(opt)}</option>`; });
+      sel.addEventListener('change', ()=>{
+        App.context[contextKey] = sel.value || null;
+        syncContextSelectors();
+      });
+    });
+  });
+  el('#ctx-relationship-select').addEventListener('change', (e)=>{
+    App.context.relationship = e.target.value;
+  });
+}
+function syncContextSelectors(){
+  // Keep both sets of selectors (Virtual Sales Call + Focus Area Playbooks)
+  // showing the same values, since they share one App.context — setting
+  // industry/role/size in either place should be reflected in the other.
+  const c = App.context;
+  if(el('#scenario-industry-select')) el('#scenario-industry-select').value = c.industry || '';
+  if(el('#ctx-industry-select')) el('#ctx-industry-select').value = c.industry || '';
+  if(el('#scenario-role-select')) el('#scenario-role-select').value = c.contactRole || '';
+  if(el('#ctx-role-select')) el('#ctx-role-select').value = c.contactRole || '';
+  if(el('#scenario-size-select')) el('#scenario-size-select').value = c.orgSize || '';
+  if(el('#ctx-size-select')) el('#ctx-size-select').value = c.orgSize || '';
+  if(el('#ctx-relationship-select')) el('#ctx-relationship-select').value = c.relationship || 'prospect';
 }
 populateScenarioSelectors();
 function addHintBubble(hint, auto){

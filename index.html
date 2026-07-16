@@ -101,6 +101,31 @@
         <h2>Focus Area Playbooks</h2>
         <p>Pick a focus area below to learn what it is and why it matters, then practice a guided discovery path — Situation, Problem, Implication, Need-payoff — to see how you'd qualify a real conversation. If an area turns out to be a genuine dead end, you'll get the option to cross-sell into a different one, just like a real call rarely ends after one "no."</p>
       </div>
+      <div class="context-panel">
+        <h4>Set the customer context (optional)</h4>
+        <p class="context-panel-sub">Changes the actual questions and coaching you'll see below — same context model as the Virtual Sales Call. Leave anything on "Any / Not set" to keep it generic.</p>
+        <div class="context-panel-grid">
+          <div>
+            <label for="ctx-industry-select">Industry</label>
+            <select id="ctx-industry-select"><option value="">Any / Not set</option></select>
+          </div>
+          <div>
+            <label for="ctx-role-select">Contact role</label>
+            <select id="ctx-role-select"><option value="">Any / Not set</option></select>
+          </div>
+          <div>
+            <label for="ctx-size-select">Org size</label>
+            <select id="ctx-size-select"><option value="">Any / Not set</option></select>
+          </div>
+          <div>
+            <label for="ctx-relationship-select">Relationship</label>
+            <select id="ctx-relationship-select">
+              <option value="prospect">New prospect</option>
+              <option value="existing-customer">Existing customer</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <div class="piece-grid" id="qual-picker-grid"></div>
     </div>
     <div class="qual-wrap hidden" id="qual-wrap">
