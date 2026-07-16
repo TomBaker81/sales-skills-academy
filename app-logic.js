@@ -1085,7 +1085,8 @@ async function renderLeaderboard(){
   const medal = i => i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
   wrap.innerHTML = `
     <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;">
-      <table style="width:100%;border-collapse:collapse;">
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:520px;">
         <tr style="background:var(--navy);color:#fff;text-align:left;">
           <th style="padding:10px 14px;font-size:12px;">Rank</th>
           <th style="padding:10px 14px;font-size:12px;">Name</th>
@@ -1104,6 +1105,7 @@ async function renderLeaderboard(){
           <td style="padding:10px 14px;color:var(--ink-faint);font-size:13px;">${esc(r.bestCompany)}${r.bestLevel?' · '+esc(r.bestLevel):''}</td>
         </tr>`).join('')}
       </table>
+      </div>
     </div>`;
 }
 
@@ -1228,7 +1230,8 @@ async function renderManagerReport(){
       <div class="mgr-stat"><div class="mgr-stat-num">${goodStagePct}%</div><div class="mgr-stat-label">Questions were Implication / Need-payoff</div></div>
     </div>
     <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;">
-      <table style="width:100%;border-collapse:collapse;">
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:680px;">
         <tr style="background:var(--navy);color:#fff;text-align:left;">
           <th style="padding:10px 14px;font-size:12px;">Rep</th>
           <th style="padding:10px 14px;font-size:12px;">Calls</th>
@@ -1270,6 +1273,7 @@ async function renderManagerReport(){
           </div>
         </td></tr>`).join('')}
       </table>
+      </div>
     </div>
     <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each SPIN stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>`;
 
