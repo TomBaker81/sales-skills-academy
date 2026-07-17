@@ -3301,7 +3301,8 @@ async function finalScoringViaAPI(){
   const difficulty = p.difficulty || 'warm';
   const roleProfile = ROLE_KNOWLEDGE_PROFILE[p.persona.role] || null;
   const system = `You are a sales coaching engine reviewing a structured discovery conversation between a JUNIOR sales rep and a simulated SME customer. The audience for this feedback is a junior rep still building confidence — be encouraging and constructive in tone throughout, not harsh or nitpicky. Prioritise recognising active questioning and genuine curiosity over penalising imperfect technique; a rep who asked plenty of relevant questions and kept the conversation moving should score reasonably well even if not every question was a perfectly-formed Implication or Need-payoff question.
-This customer persona was deliberately set to "${difficulty}" difficulty (warm = easy and forthcoming, brisk = businesslike and has to be asked well, dismissive = genuinely tough to get going). Factor this in fairly: if difficulty was "dismissive" or "brisk", give extra credit for whatever the rep did manage to uncover, since it was genuinely harder to extract — don't penalise them as if this were an easy warm call.
+This customer persona was deliberately set to "${difficulty}" difficulty — ${DIFFICULTY_TIER_INFO[difficulty] ? DIFFICULTY_TIER_INFO[difficulty].name : difficulty} tier (Guided/warm = easy and forthcoming, Realistic/brisk = businesslike and has to be asked well, Challenging/dismissive = genuinely tough to get going).
+DIFFICULTY-WEIGHTED SCORING — apply this exact adjustment, not just a vague "credit": first work out what the overallScore would be based purely on the qualification levels reached (perArea) as if this were a Guided/warm call. Then multiply that raw score by: 1.0 if difficulty is "warm", 1.15 if difficulty is "brisk", 1.35 if difficulty is "dismissive" — and cap the result at 100. This is the SAME multiplier the offline scoring engine uses, so the two stay consistent with each other. Report the final, ALREADY-WEIGHTED number as overallScore. If the difficulty was brisk or dismissive and the weighting made a meaningful difference, say so explicitly in the summary (e.g. "this was a Challenging call, so your score reflects that extra difficulty").
 Customer profile: ${p.companyName || 'the company'}, ${p.industry}, ${p.employees} employees, persona ${p.persona.name} (${p.persona.role}).${roleProfile ? ` This role realistically owns/can discuss: ${roleProfile.strongAreas.join(', ')} — anything else, a good rep should have recognised the contact might not be the right person and asked for a referral or reframed in business terms, not pushed for technical detail this contact wouldn't have.` : ''}
 The customer's REAL hidden pains, not known to the rep in advance, were:
 ${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
@@ -3442,7 +3443,16 @@ function localFinalScoring(){
   p.hiddenPains.forEach(hp=>{ if(!covered[hp.piece]) perArea.push({piece:hp.piece, level:'none', note:'Not explored during the call — worth asking about next time.'}); });
   const missedPains = p.hiddenPains.filter(hp=> !covered[hp.piece] || LEVEL_SCORE[covered[hp.piece]]<2).map(hp=> 'Next time, try asking more about ' + PIECE_BY_ID[hp.piece].name.toLowerCase() + '.');
   const totalScore = perArea.reduce((s,a)=>s+LEVEL_SCORE[a.level],0);
-  const pct = Math.round((totalScore/(PIECES.length*3))*100);
+  const rawPct = Math.round((totalScore/(PIECES.length*3))*100);
+  // Difficulty-weighted score: the SAME raw performance is objectively more
+  // impressive on a harder call, since the persona is deliberately designed
+  // to reveal less per question. Without this, a rep doing brilliantly
+  // against a Challenging persona scores identically to the same effort
+  // against a Guided one, which isn't a fair comparison. Multipliers are
+  // applied to the raw percentage and capped at 100.
+  const DIFFICULTY_SCORE_MULTIPLIER = { warm: 1.0, brisk: 1.15, dismissive: 1.35 };
+  const difficultyKey = p.difficulty || 'warm';
+  const pct = Math.min(100, Math.round(rawPct * (DIFFICULTY_SCORE_MULTIPLIER[difficultyKey] || 1.0)));
   const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
   let overallLevel = 'Discovery Stage';
   if(pct>=55) overallLevel='Hot Opportunity'; else if(pct>=32) overallLevel='Qualified Opportunity'; else if(pct>=12) overallLevel='Developing Opportunity';
@@ -3452,6 +3462,10 @@ function localFinalScoring(){
     questionCount>=6 ? `You asked ${questionCount} questions and kept the conversation moving — that's exactly the right instinct.` : 'You kept the conversation moving and asked genuine questions.',
     'You engaged directly rather than pitching too early — good discipline for a first call.'
   ];
+  if(difficultyKey !== 'warm' && rawPct > 0){
+    const tierName = DIFFICULTY_TIER_INFO[difficultyKey] ? DIFFICULTY_TIER_INFO[difficultyKey].name : difficultyKey;
+    strengths.push(`This was a ${tierName} call — genuinely harder to extract information from than a Guided one — so your score reflects that extra difficulty, not just the raw outcome.`);
+  }
   if(repetitionCount === 0 && questionCount >= 4){
     strengths.push("You didn't repeat yourself — every question opened up new ground instead of re-asking something already covered.");
   }
