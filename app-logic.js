@@ -3284,8 +3284,8 @@ ${pieceCriteriaBlock()}
 Score it as:
 - piece: the single best-matching area id from [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], or null if unrelated/small talk
 - questionType: "situation" | "problem" | "implication" | "needpayoff" | "closed" | "other" — classify which SPIN stage the rep's message best represents
-- relevance: integer 0-3, how relevant to a REAL hidden pain in this business (0 = irrelevant, 3 = hits directly on a hidden pain with good framing)
-- qualification: "none" | "surface" | "developing" | "qualified" — how much this exchange advanced genuine qualification or the sale overall. Score generously for a junior rep: any clearly relevant, on-topic question that engages with a real pain should score at least "developing" even if the phrasing isn't textbook SPIN — reserve "none"/"surface" for questions that are genuinely off-topic, closed, or so generic they don't advance anything. Score GENEROUSLY (at least "developing", often "qualified") for any of these good behaviours even if they don't directly surface a pain:
+- relevance: integer 0-3, how relevant to a REAL hidden pain in this business (0 = irrelevant, 3 = hits directly on a hidden pain with good framing). Judge this on the MERIT OF THE QUESTION ITSELF, not on how much you (the persona) chose to reveal in response — on a brisk/dismissive persona specifically, a genuinely pertinent, well-targeted question should still score full relevance even though your reply (by design) only partially opens up. Don't let your own guardedness drag down the rep's score for asking well.
+- qualification: "none" | "surface" | "developing" | "qualified" — how much this exchange advanced genuine qualification or the sale overall. Score generously for a junior rep: any clearly relevant, on-topic question that engages with a real pain should score at least "developing" even if the phrasing isn't textbook SPIN — reserve "none"/"surface" for questions that are genuinely off-topic, closed, or so generic they don't advance anything. On brisk/dismissive difficulty, a pertinent question that only earns a guarded partial answer (because that's how this persona behaves, not because the question was weak) should still land at "developing", never "surface" or "none" purely because you held back. Score GENEROUSLY (at least "developing", often "qualified") for any of these good behaviours even if they don't directly surface a pain:
   * Pivoting to a genuinely different, relevant focus area after a dead end instead of repeating a dead question
   * Reframing a technical question into business language appropriate to this contact's role (cost, risk, downtime, impact)
   * Correctly recognising this contact isn't the right person for a topic, and asking who is, or asking for an introduction/referral — this is a POSITIVE outcome, not a failure, when handled well
@@ -3339,7 +3339,8 @@ async function finalScoringViaAPI(){
   const roleProfile = ROLE_KNOWLEDGE_PROFILE[p.persona.role] || null;
   const system = `You are a sales coaching engine reviewing a structured discovery conversation between a JUNIOR sales rep and a simulated SME customer. The audience for this feedback is a junior rep still building confidence — be encouraging and constructive in tone throughout, not harsh or nitpicky. Prioritise recognising active questioning and genuine curiosity over penalising imperfect technique; a rep who asked plenty of relevant questions and kept the conversation moving should score reasonably well even if not every question was a perfectly-formed Implication or Need-payoff question.
 This customer persona was deliberately set to "${difficulty}" difficulty — ${DIFFICULTY_TIER_INFO[difficulty] ? DIFFICULTY_TIER_INFO[difficulty].name : difficulty} tier (Guided/warm = easy and forthcoming, Realistic/brisk = businesslike and has to be asked well, Challenging/dismissive = genuinely tough to get going).
-DIFFICULTY-WEIGHTED SCORING — apply this exact adjustment, not just a vague "credit": first work out what the overallScore would be based purely on the qualification levels reached (perArea) as if this were a Guided/warm call. Then multiply that raw score by: 1.0 if difficulty is "warm", 1.15 if difficulty is "brisk", 1.35 if difficulty is "dismissive" — and cap the result at 100. This is the SAME multiplier the offline scoring engine uses, so the two stay consistent with each other. Report the final, ALREADY-WEIGHTED number as overallScore. If the difficulty was brisk or dismissive and the weighting made a meaningful difference, say so explicitly in the summary (e.g. "this was a Challenging call, so your score reflects that extra difficulty").
+DIFFICULTY-WEIGHTED SCORING — apply this exact adjustment, not just a vague "credit": first work out what the overallScore would be based purely on the qualification levels reached (perArea) as if this were a Guided/warm call. Then multiply that raw score by: 1.0 if difficulty is "warm", 1.2 if difficulty is "brisk", 1.6 if difficulty is "dismissive" — and cap the result at 100. This is the SAME multiplier the offline scoring engine uses, so the two stay consistent with each other. Report the final, ALREADY-WEIGHTED number as overallScore. If the difficulty was brisk or dismissive and the weighting made a meaningful difference, say so explicitly in the summary (e.g. "this was a Challenging call, so your score reflects that extra difficulty").
+DO NOT CONFLATE QUESTION QUALITY WITH PERSONA STINGINESS: on brisk/dismissive difficulty, a genuinely pertinent, well-targeted question should score well on relevance and roleFit even if the guarded persona only partially reveals in response — that guardedness is deliberate, designed persona behaviour, not evidence the rep asked poorly. Judge "relevance" and "roleFit" on the MERIT OF THE QUESTION ITSELF; only "qualification"/"infoLevel" should reflect how much the persona actually chose to reveal. When reviewing the turn-by-turn scores for the strengths/improvements below, if you see a pattern of high relevance paired with lower qualification specifically on a brisk/dismissive call, call this out explicitly as good technique against a tough persona, not a shortfall.
 Customer profile: ${p.companyName || 'the company'}, ${p.industry}, ${p.employees} employees, persona ${p.persona.name} (${p.persona.role}).${roleProfile ? ` This role realistically owns/can discuss: ${roleProfile.strongAreas.join(', ')} — anything else, a good rep should have recognised the contact might not be the right person and asked for a referral or reframed in business terms, not pushed for technical detail this contact wouldn't have.` : ''}
 The customer's REAL hidden pains, not known to the rep in advance, were:
 ${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
@@ -3435,8 +3436,16 @@ function localRoleplayTurn(repText){
   // reveal, and that's scored as a positive ("developing") outcome, not a
   // failure, matching how the AI-backed roleplay treats a good referral.
   const outsideRole = hiddenPain && roleProfile && !roleProfile.strongAreas.includes(pieceId);
-  // Tougher personas need a sharper question (higher probe strength) before opening up.
+  // Tougher personas need a sharper question (higher probe strength) before
+  // opening up FULLY — but a genuinely pertinent, on-topic question (any
+  // real probe strength at all) should still be credited as a good question
+  // in its own right, even on a guarded persona. Conflating "how good was
+  // the rep's question" with "how much did this stubborn persona choose to
+  // reveal" is exactly what unfairly penalised well-targeted questions on
+  // Challenging difficulty before this fix — the persona holding back is
+  // expected, deliberate behaviour, not evidence the rep asked poorly.
   const threshold = difficulty==='dismissive' ? 2 : 1;
+  const isPertinentButGuarded = difficulty==='dismissive' && hiddenPain && strength>=1 && strength<threshold;
   let reply, qualification, relevance, questionType, infoLevel, roleFit, listening, commercialJudgement, note;
   questionType = strength>=2 ? 'implication' : (repText.trim().endsWith('?') ? 'situation' : 'other');
   note = 'Offline heuristic scoring — connect an AI provider in Settings for full coaching.';
@@ -3451,6 +3460,11 @@ function localRoleplayTurn(repText){
     note = `Good, relevant question — but ${p.persona.role} likely isn't the person who owns this, so this is a moment to ask who is, or to reframe it in business terms they'd answer directly.`;
   }
   else if(hiddenPain && strength>=threshold){ reply = "Actually, yes — " + hiddenPain.detail + "."; qualification='qualified'; relevance=3; infoLevel = strength>=3 ? 3 : 2; roleFit=3; }
+  else if(isPertinentButGuarded){
+    reply = pickUnusedReply(HINTS, 'hint', state);
+    qualification='developing'; relevance=3; infoLevel=1; roleFit=3; // full relevance/roleFit credit — this WAS a good, on-topic question; the guarded reveal is the persona's doing, not the rep's
+    note = "Genuinely pertinent, on-topic question — this persona is just guarded by design and needs one more push before opening up fully. That's not a mark against you.";
+  }
   else if(hiddenPain){ reply = pickUnusedReply(HINTS, 'hint', state); qualification='developing'; relevance=2; infoLevel=1; roleFit=2; }
   else if(pieceId){ reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='surface'; relevance=1; infoLevel=0; roleFit=2; }
   else { reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='none'; relevance=0; infoLevel=0; roleFit=1; }
@@ -3488,7 +3502,7 @@ function localFinalScoring(){
   // against a Challenging persona scores identically to the same effort
   // against a Guided one, which isn't a fair comparison. Multipliers are
   // applied to the raw percentage and capped at 100.
-  const DIFFICULTY_SCORE_MULTIPLIER = { warm: 1.0, brisk: 1.15, dismissive: 1.35 };
+  const DIFFICULTY_SCORE_MULTIPLIER = { warm: 1.0, brisk: 1.2, dismissive: 1.6 };
   const difficultyKey = p.difficulty || 'warm';
   const pct = Math.min(100, Math.round(rawPct * (DIFFICULTY_SCORE_MULTIPLIER[difficultyKey] || 1.0)));
   const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
