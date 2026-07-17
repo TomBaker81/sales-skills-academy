@@ -1,16 +1,16 @@
 
   :root{
     --navy:#1B1640; --navy-deep:#120D2E;
-    --teal:#FF5F6D; --teal-deep:#E8434F;
-    --purple:#8B5CF6; --purple-deep:#7440E0;
+    --teal:#BF4751; --teal-deep:#A23640; --teal-bright:#BF4751;
+    --purple:#8457E9; --purple-deep:#6B3FCC;
     --cream:#FAFAFC; --cream-card:#FFFFFF;
-    --ink:#1B1640; --ink-soft:#5D577E; --ink-faint:#8E86AD;
+    --ink:#1B1640; --ink-soft:#5D577E; --ink-faint:#726B92;
     --line:#E5DFF5; --line-soft:#EFEAFA;
-    --amber:#D9860E; --amber-bg:#FDF1DC;
-    --blue:#3E8EDE; --blue-bg:#E8F2FD;
-    --green-bg:#E1FAF0; --grey-bg:#F0EDF8;
-    --danger:#D6294A;
-    --radius:16px; --radius-sm:10px;
+    --amber:#A2640A; --amber-bg:#FDF1DC;
+    --blue:#3478BC; --blue-bg:#E8F2FD;
+    --green:#0A825A; --green-bg:#E1FAF0; --grey-bg:#F0EDF8;
+    --danger:#C21F3E;
+    --radius:18px; --radius-sm:12px;
     --shadow: 0 14px 34px rgba(27,22,64,.14);
     --shadow-sm: 0 4px 12px rgba(27,22,64,.08);
     --font-head:'Space Grotesk',sans-serif; --font-body:'Plus Jakarta Sans',sans-serif;
@@ -66,9 +66,10 @@
   .section-label{font-family:var(--font-head);font-weight:800;font-size:12.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--teal-deep);margin:0 0 8px;}
 
   .piece-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:14px;margin-top:14px;}
-  .piece-card{position:relative;background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-sm);cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:8px;transition:.15s transform,.15s box-shadow;border-top:5px solid var(--accent,var(--navy));}
-  .piece-card:hover{transform:translateY(-3px);box-shadow:var(--shadow);}
-  .piece-card .pc-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--accent,var(--navy));font-size:18px;color:#fff;}
+  .piece-card{position:relative;background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm);cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:9px;transition:.18s transform,.18s box-shadow,.18s border-color;border-top:3px solid var(--accent,var(--navy));}
+  .piece-card:hover{transform:translateY(-4px);box-shadow:var(--shadow);border-color:var(--accent,var(--line));}
+  .piece-card:hover .pc-icon{transform:scale(1.08);}
+  .piece-card .pc-icon{width:42px;height:42px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg, var(--accent,var(--navy)) 0%, color-mix(in srgb, var(--accent,var(--navy)) 78%, black) 100%);font-size:19px;color:#fff;box-shadow:0 3px 8px color-mix(in srgb, var(--accent,var(--navy)) 45%, transparent);transition:.18s transform;}
   .piece-card h3{font-family:var(--font-head);font-size:15.5px;margin:2px 0 0;font-weight:800;color:var(--navy);}
   .piece-card p{font-size:12.8px;color:var(--ink-soft);margin:0;line-height:1.45;flex:1;}
   .piece-card .pc-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;align-self:flex-start;}
@@ -158,9 +159,9 @@
   .primer-spin{display:flex;flex-direction:column;gap:10px;}
   .primer-spin > div{background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px;color:var(--ink);line-height:1.5;}
   .spin-tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:99px;margin-right:10px;color:#fff;}
-  .spin-tag.situation{background:#0C9C6B;}
-  .spin-tag.problem{background:#D9860E;}
-  .spin-tag.implication{background:#8B5CF6;}
+  .spin-tag.situation{background:#0A825A;}
+  .spin-tag.problem{background:#A2640A;}
+  .spin-tag.implication{background:#8457E9;}
   .spin-tag.needpayoff{background:#1B1640;}
   .primer-objections{display:flex;flex-direction:column;gap:10px;}
   .objection-item{background:#fff;border:1px solid var(--line);border-left:4px solid var(--danger);border-radius:var(--radius-sm);padding:12px 14px;}
