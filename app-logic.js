@@ -3209,13 +3209,29 @@ function buildStateSummaryForPrompt(){
   const hasAny = state.confirmedFacts.length || state.confirmedProblems.length || state.confirmedImpacts.length ||
     state.desiredOutcomes.length || state.ruledOutIssues.length || state.questionsAsked.length;
   if(!hasAny) return '';
+  // Caps below prevent unbounded prompt growth over a long session — this
+  // was a real, confirmed problem: an ever-growing prompt (especially the
+  // full text of every question ever asked) measurably degrades a model's
+  // adherence to strict JSON-only output the longer a conversation runs,
+  // eventually producing plain text instead of JSON. The duplicate-question
+  // BLOCKING itself still checks the FULL, uncapped questionsAsked history
+  // client-side before any API call is made — this cap only affects what's
+  // shown to the model for its own awareness, not what's actually enforced.
+  const MAX_FACTS_SHOWN = 10;
+  const MAX_QUESTIONS_SHOWN = 15;
+  const recentFirst = arr => arr.slice(-MAX_FACTS_SHOWN);
   const parts = ['Established so far in THIS conversation — stay consistent with ALL of it, and do not repeat a question or intent already covered below:'];
-  if(state.confirmedFacts.length) parts.push('Current situation facts: ' + state.confirmedFacts.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
-  if(state.confirmedProblems.length) parts.push('Confirmed problems: ' + state.confirmedProblems.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
-  if(state.confirmedImpacts.length) parts.push('Confirmed impacts: ' + state.confirmedImpacts.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
-  if(state.desiredOutcomes.length) parts.push('Desired outcomes raised: ' + state.desiredOutcomes.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.confirmedFacts.length) parts.push('Current situation facts: ' + recentFirst(state.confirmedFacts).map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.confirmedProblems.length) parts.push('Confirmed problems: ' + recentFirst(state.confirmedProblems).map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.confirmedImpacts.length) parts.push('Confirmed impacts: ' + recentFirst(state.confirmedImpacts).map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.desiredOutcomes.length) parts.push('Desired outcomes raised: ' + recentFirst(state.desiredOutcomes).map(f=>`(${f.piece}) ${f.fact}`).join('; '));
   if(state.ruledOutIssues.length) parts.push('Already ruled out / no pain found: ' + state.ruledOutIssues.map(r=>r.piece).join(', '));
-  if(state.questionsAsked.length) parts.push('Questions and intents already covered (do not repeat these): ' + state.questionsAsked.map(q=>`"${q.text}" [${q.stage}/${q.objective}]`).join('; '));
+  if(state.questionsAsked.length){
+    const recentQuestions = state.questionsAsked.slice(-MAX_QUESTIONS_SHOWN);
+    const olderCount = state.questionsAsked.length - recentQuestions.length;
+    const olderNote = olderCount > 0 ? ` (plus ${olderCount} earlier question${olderCount===1?'':'s'} not shown here, on: ${Array.from(new Set(state.questionsAsked.slice(0, olderCount).map(q=>q.objective))).join(', ')})` : '';
+    parts.push('Questions and intents already covered (do not repeat these)' + olderNote + ': ' + recentQuestions.map(q=>`"${q.text}" [${q.stage}/${q.objective}]`).join('; '));
+  }
   return parts.join('\n') + '\n';
 }
 async function roleplayTurnViaAPI(repText){
@@ -3282,10 +3298,23 @@ Score it as:
 - note: one or two short, encouraging coaching-style sentences that explain the REASONING, not just praise or criticise — what they did well or could improve, whether this contact was even the right person to ask about this topic, and if there's a clearly better next move (probe deeper, pivot to a different area, or ask for the right stakeholder), name it briefly
 
 Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
-{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "note": "..."}}`;
+{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "note": "..."}}
+REMINDER, since this conversation may have grown long: respond with ONLY that JSON object. No prose before or after it, no markdown fences. This matters more, not less, the longer the conversation gets.`;
 
+  // Cap the raw message history sent to the model — the structured state
+  // summary above already carries forward the long-term facts (confirmed
+  // problems/impacts/outcomes, ruled-out areas, questions covered), so the
+  // full unbounded transcript isn't needed for consistency, only for
+  // immediate conversational flow. Sending an ever-growing transcript on
+  // every turn was a real problem in long sessions: models measurably lose
+  // adherence to strict output-format instructions as the prompt grows, and
+  // a ~15-minute session with many turns could plausibly push this past the
+  // point where the model reliably returns JSON at all rather than plain
+  // text — exactly the "No JSON object found" failure this fixes.
+  const RECENT_HISTORY_TURNS = 24; // ~12 back-and-forth exchanges
+  const recentMessages = Coach.messages.slice(-RECENT_HISTORY_TURNS);
   const history = [];
-  Coach.messages.forEach(m=>{ if(m.who==='rep') history.push({role:'user', content:m.text}); else history.push({role:'assistant', content:m.text}); });
+  recentMessages.forEach(m=>{ if(m.who==='rep') history.push({role:'user', content:m.text}); else history.push({role:'assistant', content:m.text}); });
   history.push({role:'user', content:repText});
 
   const text = await callAI(system, history, 500);
@@ -3296,7 +3325,15 @@ Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
 
 async function finalScoringViaAPI(){
   const p = Coach.profile;
-  const transcript = Coach.messages.map(m=> (m.who==='rep' ? 'Rep: ' : (p.persona.name+': ')) + m.text).join('\n');
+  // Defensive cap for extremely long sessions — final scoring benefits from
+  // more context than a single turn does (hence a much higher limit here),
+  // but an unbounded transcript is still a risk for the same reason capped
+  // in roleplayTurnViaAPI: prompt bloat measurably degrades JSON-format
+  // adherence in long conversations.
+  const MAX_TRANSCRIPT_MESSAGES = 60;
+  const transcriptMessages = Coach.messages.slice(-MAX_TRANSCRIPT_MESSAGES);
+  const truncatedNote = Coach.messages.length > MAX_TRANSCRIPT_MESSAGES ? `[${Coach.messages.length - MAX_TRANSCRIPT_MESSAGES} earlier messages omitted for length]\n` : '';
+  const transcript = truncatedNote + transcriptMessages.map(m=> (m.who==='rep' ? 'Rep: ' : (p.persona.name+': ')) + m.text).join('\n');
   const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
   const difficulty = p.difficulty || 'warm';
   const roleProfile = ROLE_KNOWLEDGE_PROFILE[p.persona.role] || null;
@@ -3322,7 +3359,8 @@ Produce a final qualification scorecard. Respond with ONLY a valid JSON object, 
  "improvements": [2 to 4 short strings, framed as encouraging next-step suggestions rather than faults — e.g. "Try asking..." rather than "You failed to...". Include, where relevant: asking a technical question that was really outside this contact's role instead of reframing or asking who the right person is; forcing a cross-sell pitch onto an area the customer showed no interest in or ownership of, instead of pivoting naturally; stopping at a surface answer instead of following up toward business impact; and if any turn in the scoring above has "repetition":true, name it directly (which earlier question it duplicated) and suggest what a genuinely different follow-up would have explored instead],
  "summary": "2 to 3 sentence encouraging coaching summary written directly to the rep, second person, ending on a constructive note. If difficulty was brisk or dismissive, acknowledge that this was a tougher call than usual.",
  "recommendedNextStep": "1 sentence, concrete and specific to what actually happened on THIS call — e.g. naming a stakeholder to follow up with if a referral was mentioned, or the single most promising area to open with on a follow-up call, or the pain most worth chasing next"
-}`;
+}
+REMINDER: respond with ONLY that JSON object, no prose before or after it, no markdown fences — this matters even more on a long transcript.`;
   const text = await callAI(system, [{role:'user', content:'Produce the final scorecard now.'}], 1100);
   return extractJSON(text);
 }
