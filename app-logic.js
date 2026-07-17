@@ -922,9 +922,159 @@ const Leaderboard = {
     } catch(e){ return null; }
   }
 };
+/* =========================================================================
+   SPIN QUESTION-INTENT TRACKING, DUPLICATE DETECTION & CONVERSATION STATE
+   ==========================================================================
+   Root cause this section fixes: previously, every rep message in the
+   Virtual Sales Call was sent to the AI/offline engine as an isolated
+   exchange — nothing prevented a reworded repeat of an earlier question
+   from being accepted, and nothing forced the customer's answer to stay
+   consistent with what was already established. This runs BEFORE any
+   AI/offline call, as a deterministic layer both engines share, rather than
+   relying on prompt wording alone to catch repetition or contradiction. */
+
+const STOPWORDS = new Set(['a','an','the','is','are','was','were','do','does','did','you','your','yours','how','what','why',
+  'when','where','who','which','can','could','would','should','will','to','of','for','with','in','on','at','that','this',
+  'these','those','and','or','but','if','so','it','its','me','my','we','our','us','i','currently','please','tell','explain',
+  'about','have','has','had','be','been','being','just','right','now','today','actually','really','kind','sort','like',
+  'there','any','some','get','got','going','out','up','down']);
+
+// Very lightweight stemmer — good enough to catch "manage/managing/managed",
+// not a full linguistic stemmer, but sufficient for short discovery questions.
+function stem(word){
+  word = word.replace(/[^a-z]/gi, '').toLowerCase();
+  if(word.length > 5 && word.endsWith('ing')) word = word.slice(0, -3);
+  else if(word.length > 4 && word.endsWith('ed')) word = word.slice(0, -2);
+  else if(word.length > 4 && word.endsWith('ies')) word = word.slice(0, -3) + 'y';
+  else if(word.length > 4 && word.endsWith('es')) word = word.slice(0, -2);
+  else if(word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) word = word.slice(0, -1);
+  return word;
+}
+// Canonical synonym clusters — applied after stemming so, e.g., "problem"
+// and "issues" (lexically unrelated, so stemming alone can't catch them)
+// still count as the same content word for similarity purposes. This is
+// deliberately small and targeted at common discovery-question synonyms,
+// not a general thesaurus.
+const SYNONYM_CANON = {
+  issu:'problem', troubl:'problem', difficult:'problem', concern:'problem', pain:'problem', hiccup:'problem', snag:'problem', hassl:'problem',
+  handl:'manage', deal:'manage', administ:'manage', run:'manage', overse:'manage',
+  method:'process', approach:'process', way:'process',
+  existing:'current', present:'current',
+  occur:'happen', aris:'happen',
+  expens:'cost', spend:'cost', budget:'cost', price:'cost',
+  suppli:'supplier', vendor:'supplier', provider:'supplier'
+};
+function contentWords(text){
+  return (text.toLowerCase().match(/[a-z']+/g) || [])
+    .map(stem)
+    .filter(w => w.length > 1 && !STOPWORDS.has(w))
+    .map(w => SYNONYM_CANON[w] || w);
+}
+function jaccardSimilarity(wordsA, wordsB){
+  const a = new Set(wordsA), b = new Set(wordsB);
+  if(a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  a.forEach(w => { if(b.has(w)) intersection++; });
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+// Keyword-based objective tagging — not true NLU, but a deterministic,
+// testable way to recognise "these two questions are chasing the same
+// dimension of the topic" even when the AI/offline engine can't be asked
+// to judge that live. Order matters: first matching objective wins.
+const SITUATION_OBJECTIVES = [
+  ['existing-supplier', ['supplier','provider','vendor','who supplies','currently with','contract with']],
+  ['contract-position', ['contract','renewal','tie','lock','expir','term']],
+  ['scale', ['how many','number of','how much of','across how many']],
+  ['ownership', ['who look','who manage','who own','whose respons','who\u2019s respons','who is respons']],
+  ['support-arrangements', ['support','help desk','fix things','when something break','maintenance']],
+  ['reporting', ['report','visibility','dashboard','see what','track']],
+  ['recent-changes', ['changed recently','anything new','recent change','grown','growing','moved office']],
+  ['frequency', ['how often','regularly','one-off','every day','how frequently']],
+  ['technology-used', ['what system','what software','what platform','what tool','using today','set up today']],
+  ['stakeholders', ['who else','anyone else','other people involved','colleagues']],
+  ['current-process', ['how do you','how does','what process','how is it handled','managed today','manage today']]
+];
+const PROBLEM_OBJECTIVES = [
+  ['cost', ['cost','expensive','budget','spend','price','money']],
+  ['risk', ['risk','exposed','vulnerab','compliance','regulat','security concern']],
+  ['operational-inefficiency', ['slow','inefficient','time consuming','manual','workaround','duplicate work']],
+  ['user-frustration', ['frustrat','annoy','fed up','staff complain','unhappy']],
+  ['service-quality', ['quality','reliab','downtime','outage','drop out']],
+  ['visibility', ['visibility','don\u2019t know','no idea','blind spot','can\u2019t see']],
+  ['supplier-limitations', ['provider doesn\u2019t','supplier can\u2019t','let you down','fall short']],
+  ['delays', ['delay','wait','takes too long','backlog']],
+  ['growth-constraints', ['scale','grow','expansion','can\u2019t keep up','outgrown']],
+  ['compliance', ['complian','audit','regulat','governance','policy']],
+  ['general-problem-check', ['problem','issue','trouble','difficult','goes wrong','gone wrong','pain point']]
+];
+function classifyObjective(text, stage){
+  const lower = text.toLowerCase().replace(/[\u2019']/g, '\u2019');
+  const table = stage === 'problem' ? PROBLEM_OBJECTIVES : SITUATION_OBJECTIVES;
+  for(const [tag, keywords] of table){
+    if(keywords.some(k => lower.includes(k))) return tag;
+  }
+  return 'general';
+}
+
+function freshConversationState(){
+  return {
+    questionsAsked: [],       // [{text, words, stage, piece, objective, turnIndex}]
+    confirmedFacts: [],        // [{piece, fact, turnIndex}] — things established as true
+    ruledOutIssues: [],        // [{piece, note}]
+    painAreas: [],             // [{piece, severity, turnIndex}]
+    sentimentTrack: [],        // [{turnIndex, sentiment}] — tracked SEPARATELY from facts
+    stagePerPiece: {},         // pieceId -> highest stage reached with confirmation
+    stakeholdersRaised: [],
+    contradictionsFlagged: []
+  };
+}
+
+// The core duplicate check — runs before ANY engine call. Flags a question
+// as repetitive if it's textually very similar to an earlier one on the
+// same piece/stage, OR if it targets the same classified objective on the
+// same piece/stage as an earlier question (catches paraphrases the text
+// check alone might miss, e.g. "who looks after your devices" vs "who's
+// responsible for managing them" — both 'ownership', low text overlap).
+function detectDuplicateQuestion(text, piece, stage, state){
+  const words = contentWords(text);
+  const objective = classifyObjective(text, stage);
+  const priorSameContext = state.questionsAsked.filter(q => q.stage === stage && (!piece || !q.piece || q.piece === piece));
+  for(const prior of priorSameContext){
+    const similarity = jaccardSimilarity(words, prior.words);
+    if(similarity >= 0.4){
+      return { isDuplicate: true, matchedQuestion: prior.text, reason: 'very similar wording', objective };
+    }
+    if(objective !== 'general' && objective === prior.objective){
+      return { isDuplicate: true, matchedQuestion: prior.text, reason: `already explored "${objective.replace(/-/g,' ')}"`, objective };
+    }
+  }
+  return { isDuplicate: false, objective };
+}
+// Suggests an objective not yet covered for this piece/stage, so the
+// rejection message can point somewhere genuinely new rather than just
+// saying "try again".
+function suggestUncoveredObjective(piece, stage, state){
+  const table = stage === 'problem' ? PROBLEM_OBJECTIVES : SITUATION_OBJECTIVES;
+  const covered = new Set(state.questionsAsked.filter(q=>q.stage===stage && (!piece || !q.piece || q.piece===piece)).map(q=>q.objective));
+  const uncovered = table.find(([tag]) => !covered.has(tag));
+  return uncovered ? uncovered[0].replace(/-/g,' ') : null;
+}
+// Rough heuristic used ONLY to decide which "objective" table to check a
+// question against for duplicate detection — not a substitute for the
+// engine's own richer questionType scoring, which still runs afterwards.
+function preClassifyStage(text){
+  const lower = text.toLowerCase();
+  if(/would (that|it|this) (help|be worth)|if we could|make sense to (look|explore)|want(ed)? to (fix|sort|solve)/.test(lower)) return 'needpayoff';
+  if(/what would that (cost|mean)|what does that (cost|mean)|impact|what happens if|how much (does|would)|knock.on effect/.test(lower)) return 'implication';
+  if(/\bissue|\bproblem|frustrat|trouble|difficult|concern|pain point|goes wrong|gone wrong/.test(lower)) return 'problem';
+  return 'situation';
+}
+
 const Coach = {
   active:false, mode:null, profile:null, messages:[], turnScores:[], ended:false, busy:false,
-  usedHints:new Set(), hintNudgeTimer:null, inactivityEndTimer:null
+  usedHints:new Set(), hintNudgeTimer:null, inactivityEndTimer:null, conversationState: freshConversationState()
 };
 let HINT_NUDGE_MS = 60*1000;        // surface a fresh, stage-aware hint after 1 minute with no new message
 let INACTIVITY_END_MS = 10*60*1000; // auto-score after 10 minutes with no new message
@@ -2346,7 +2496,7 @@ async function newScenario(){
 
   el('#btn-new-scenario').disabled = true;
   el('#btn-new-scenario').textContent = 'Generating…';
-  Coach.active = true; Coach.messages = []; Coach.turnScores = []; Coach.ended = false; Coach.usedHints = new Set();
+  Coach.active = true; Coach.messages = []; Coach.turnScores = []; Coach.ended = false; Coach.usedHints = new Set(); Coach.conversationState = freshConversationState();
   clearTimeout(Coach.hintNudgeTimer); clearTimeout(Coach.inactivityEndTimer);
   stopListening();
   if(window.speechSynthesis) window.speechSynthesis.cancel();
@@ -2750,6 +2900,27 @@ async function sendRepMessage(){
   const text = chatInput.value.trim();
   if(!text) return;
   stopListening();
+
+  // Duplicate/repetition check — runs BEFORE any AI/offline call, as a
+  // deterministic layer shared by both engines, per the fix's core
+  // principle: don't rely on prompt wording alone to catch a reworded
+  // repeat of an earlier question.
+  const stage = preClassifyStage(text);
+  const piece = matchPiece(text);
+  const dup = detectDuplicateQuestion(text, piece, stage, Coach.conversationState);
+  if(dup.isDuplicate){
+    chatInput.value = '';
+    addBubble('rep', text);
+    const suggestion = suggestUncoveredObjective(piece, stage, Coach.conversationState);
+    const note = `That's very close to something you already asked — "${dup.matchedQuestion}" (${dup.reason}). The customer's already told you about that; repeating it won't uncover anything new.` +
+      (suggestion ? ` Try asking about ${suggestion} instead.` : ' Try a different angle, or move to the next stage.');
+    addBubble('system', note);
+    Coach.turnScores.push({ piece, questionType: stage, relevance: 0, qualification: 'none', infoLevel: 0, roleFit: 2, listening: 0, commercialJudgement: 1, note, repetition: true });
+    updateGauge();
+    return; // preserve state, no engine call, no new/contradictory customer answer generated
+  }
+  Coach.conversationState.questionsAsked.push({ text, words: contentWords(text), stage, piece, objective: dup.objective, turnIndex: Coach.messages.length });
+
   chatInput.value = '';
   addBubble('rep', text);
   Coach.messages.push({who:'rep', text});
@@ -2762,7 +2933,7 @@ async function sendRepMessage(){
     hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
-    if(result.scoring){ Coach.turnScores.push(result.scoring); updateGauge(); }
+    if(result.scoring){ Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece); }
   } catch(err){
     hideTyping();
     addBubble('system', "Couldn't reach the AI coach (" + err.message + ") — switching to offline practice mode.");
@@ -2773,9 +2944,30 @@ async function sendRepMessage(){
     hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
-    Coach.turnScores.push(result.scoring); updateGauge();
+    Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece);
   }
   Coach.busy = false; el('#btn-send').disabled = false; chatInput.focus();
+}
+// Keeps Coach.conversationState up to date after every real (non-duplicate)
+// exchange, so later turns — and the final scorecard — can see what's
+// already been confirmed, ruled out, or flagged as a pain area.
+function updateConversationStateFromScoring(scoring, piece){
+  const state = Coach.conversationState;
+  const turnIndex = Coach.messages.length;
+  const targetPiece = scoring.piece || piece;
+  if(!targetPiece) return;
+  const level = scoring.qualification;
+  if(level === 'qualified' || level === 'developing'){
+    state.painAreas.push({ piece: targetPiece, severity: level, turnIndex });
+    state.confirmedFacts.push({ piece: targetPiece, fact: `Pain confirmed at ${level} level`, turnIndex });
+  } else if(level === 'none' && (scoring.infoLevel||0) === 0){
+    // Only mark ruled-out on a genuinely empty/deflected answer, not just a
+    // low score — a "surface" answer may still contain a fact worth keeping.
+    if(!state.ruledOutIssues.some(r=>r.piece===targetPiece)) state.ruledOutIssues.push({ piece: targetPiece, note: 'No pain surfaced when asked directly' });
+  }
+  const currentStageRank = {situation:1, problem:2, implication:3, needpayoff:4}[scoring.questionType] || 0;
+  const priorRank = {situation:1, problem:2, implication:3, needpayoff:4}[state.stagePerPiece[targetPiece]] || 0;
+  if(currentStageRank > priorRank) state.stagePerPiece[targetPiece] = scoring.questionType;
 }
 el('#btn-end-scenario').addEventListener('click', ()=> endScenario());
 
@@ -2837,6 +3029,18 @@ ${pieceCriteriaBlock()}`;
   return data;
 }
 
+function buildStateSummaryForPrompt(){
+  const state = Coach.conversationState;
+  if(!state.confirmedFacts.length && !state.ruledOutIssues.length) return '';
+  const parts = ['Established so far in THIS conversation — stay consistent with all of it:'];
+  if(state.confirmedFacts.length){
+    parts.push('Confirmed facts: ' + state.confirmedFacts.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  }
+  if(state.ruledOutIssues.length){
+    parts.push('Already ruled out / no pain found: ' + state.ruledOutIssues.map(r=>r.piece).join(', '));
+  }
+  return parts.join('\n') + '\n';
+}
 async function roleplayTurnViaAPI(repText){
   const p = Coach.profile;
   const difficulty = p.difficulty || 'warm';
@@ -2870,6 +3074,9 @@ Your business's ACTUAL underlying issues are below — don't blurt these out unp
 ${forthcomingByDifficulty[difficulty]}
 Hidden pains:
 ${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
+${buildStateSummaryForPrompt()}
+CONSISTENCY IS CRITICAL: never contradict a fact already confirmed above. If the rep asks something close to a question already covered, acknowledge that briefly ("as I said...") and either reinforce the same answer or add a genuinely NEW dimension — never reverse your position just because the wording changed. You may legitimately describe a DIFFERENT part of the same area differently (e.g. "enrolment is fine, but reporting is a mess") — that is not a contradiction, it's a new dimension, and should be framed as such.
+SPIN ORDER: if the rep asks an Implication-style question ("what would that cost you") before any real Problem has been confirmed on that topic, don't invent an impact — gently note there isn't really a confirmed problem to build on yet, and let them know a more basic question would help first. Likewise don't hand over a Need-payoff-style resolution before a real impact has been established.
 Stay fully in character, realistic, 1 to 4 sentences per reply. Never break character or mention this is a simulation.
 After your reply, evaluate the REP'S LAST MESSAGE for sales qualification quality against these solution focus areas and their qualification criteria:
 ${pieceCriteriaBlock()}
@@ -2925,8 +3132,8 @@ Produce a final qualification scorecard. Respond with ONLY a valid JSON object, 
  "overallScore": integer 0-100,
  "perArea": [{"piece": id, "level":"none"|"surface"|"developing"|"qualified", "note": short string explaining WHY it landed at this level, e.g. "asked a good opener but never followed up on the cost/impact" or "correctly identified this wasn't the contact's area and asked for a referral"}] — include only areas that were touched on OR that had a hidden pain,
  "missedPains": [short strings describing hidden pains never meaningfully uncovered — phrase these as gentle "next time, try asking about..." pointers, not criticism],
- "strengths": [2 to 4 short strings — actively look for and credit ALL of the following where they occurred, quoting or referencing the specific moment briefly: asking good follow-ups and staying curious; covering multiple areas; a sensible pivot away from a dead end into a genuinely different relevant area (name both areas); reframing a technical question into business language appropriate to the contact's role; correctly recognising the contact wasn't the right person for a topic and asking for a referral or introduction — treat this as a genuine positive, not a consolation prize; moving from a surface answer to real business impact by following up well; and if the persona was brisk/dismissive, credit persistence specifically],
- "improvements": [2 to 4 short strings, framed as encouraging next-step suggestions rather than faults — e.g. "Try asking..." rather than "You failed to...". Include, where relevant: asking a technical question that was really outside this contact's role instead of reframing or asking who the right person is; forcing a cross-sell pitch onto an area the customer showed no interest in or ownership of, instead of pivoting naturally; stopping at a surface answer instead of following up toward business impact],
+ "strengths": [2 to 4 short strings — actively look for and credit ALL of the following where they occurred, quoting or referencing the specific moment briefly: asking good follow-ups and staying curious; covering multiple areas; a sensible pivot away from a dead end into a genuinely different relevant area (name both areas); reframing a technical question into business language appropriate to the contact's role; correctly recognising the contact wasn't the right person for a topic and asking for a referral or introduction — treat this as a genuine positive, not a consolation prize; moving from a surface answer to real business impact by following up well; if the persona was brisk/dismissive, credit persistence specifically; and if the turn-by-turn scoring above shows zero entries with "repetition":true across a reasonably long call, explicitly credit the rep for never repeating a question — this is a real, valuable discipline, not a minor detail],
+ "improvements": [2 to 4 short strings, framed as encouraging next-step suggestions rather than faults — e.g. "Try asking..." rather than "You failed to...". Include, where relevant: asking a technical question that was really outside this contact's role instead of reframing or asking who the right person is; forcing a cross-sell pitch onto an area the customer showed no interest in or ownership of, instead of pivoting naturally; stopping at a surface answer instead of following up toward business impact; and if any turn in the scoring above has "repetition":true, name it directly (which earlier question it duplicated) and suggest what a genuinely different follow-up would have explored instead],
  "summary": "2 to 3 sentence encouraging coaching summary written directly to the rep, second person, ending on a constructive note. If difficulty was brisk or dismissive, acknowledge that this was a tougher call than usual.",
  "recommendedNextStep": "1 sentence, concrete and specific to what actually happened on THIS call — e.g. naming a stakeholder to follow up with if a referral was mentioned, or the single most promising area to open with on a follow-up call, or the pain most worth chasing next"
 }`;
@@ -2975,6 +3182,29 @@ function localRoleplayTurn(repText){
   const strength = probeStrength(repText);
   const hiddenPain = pieceId ? p.hiddenPains.find(hp=>hp.piece===pieceId) : null;
   const roleProfile = ROLE_KNOWLEDGE_PROFILE[p.persona.role];
+
+  // Consistency check: if this piece was already confirmed or ruled out
+  // earlier in the conversation, reference that established fact instead of
+  // re-rolling a fresh random reply — prevents the offline engine from
+  // ever contradicting itself on the same topic asked a second way.
+  const state = Coach.conversationState;
+  const priorPain = pieceId ? state.painAreas.find(a=>a.piece===pieceId) : null;
+  const priorRuledOut = pieceId ? state.ruledOutIssues.find(r=>r.piece===pieceId) : null;
+  if(pieceId && priorPain){
+    return {
+      reply: `As I mentioned, that's a real issue for us — ${hiddenPain ? hiddenPain.detail : 'the same one I flagged before'}. Anything specific you want to know about it?`,
+      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 2, qualification: 'developing', infoLevel: 3, roleFit: 2, listening: 3, commercialJudgement: 2,
+        note: 'Good to circle back, but this was already confirmed — worth pushing into a new dimension (impact, timing, stakeholders) rather than re-confirming the same fact.' }
+    };
+  }
+  if(pieceId && priorRuledOut){
+    return {
+      reply: `Like I said, that one's genuinely fine for us — not something we're dealing with.`,
+      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 1, qualification: 'surface', infoLevel: 0, roleFit: 2, listening: 1, commercialJudgement: 1,
+        note: "This area was already ruled out — re-asking it won't change the answer. Consider pivoting to a different focus area instead." }
+    };
+  }
+
   // If this pain sits outside what this contact's role would plausibly own,
   // a real person would defer/refer rather than explain it themselves —
   // even a well-targeted question earns a realistic handoff, not a direct
@@ -3032,12 +3262,20 @@ function localFinalScoring(){
   let overallLevel = 'Discovery Stage';
   if(pct>=55) overallLevel='Hot Opportunity'; else if(pct>=32) overallLevel='Qualified Opportunity'; else if(pct>=12) overallLevel='Developing Opportunity';
   const pivot = detectPivot(Coach.turnScores);
+  const repetitionCount = Coach.turnScores.filter(t=>t.repetition).length;
   const strengths = [
     questionCount>=6 ? `You asked ${questionCount} questions and kept the conversation moving — that's exactly the right instinct.` : 'You kept the conversation moving and asked genuine questions.',
     'You engaged directly rather than pitching too early — good discipline for a first call.'
   ];
+  if(repetitionCount === 0 && questionCount >= 4){
+    strengths.push("You didn't repeat yourself — every question opened up new ground instead of re-asking something already covered.");
+  }
   if(pivot){
     strengths.push(`Good instinct moving from ${PIECE_BY_ID[pivot.from].name} into ${PIECE_BY_ID[pivot.to].name} once the first one wasn't landing — that's real cross-selling, not just giving up on a dead end.`);
+  }
+  const improvements = ['Try asking a follow-up "what happens when..." or "what does that cost you" question after each answer — that\'s usually where the real detail comes out.','Keep going a little further into more of the focus areas before wrapping up.'];
+  if(repetitionCount > 0){
+    improvements.unshift(`${repetitionCount} question${repetitionCount===1?' was':'s were'} too close to one already asked — once an area's confirmed, push into a new dimension (impact, timing, stakeholders) rather than re-asking the same thing a different way.`);
   }
   const bestArea = perArea.slice().sort((a,b)=>LEVEL_SCORE[b.level]-LEVEL_SCORE[a.level])[0];
   const recommendedNextStep = bestArea && LEVEL_SCORE[bestArea.level] >= 2
@@ -3047,7 +3285,7 @@ function localFinalScoring(){
     overallLevel, overallScore: pct, perArea,
     missedPains: missedPains.length? missedPains : ['Good coverage — you asked about most of the known pain areas.'],
     strengths,
-    improvements:['Try asking a follow-up "what happens when..." or "what does that cost you" question after each answer — that\'s usually where the real detail comes out.','Keep going a little further into more of the focus areas before wrapping up.'],
+    improvements,
     summary:"This is an offline practice summary based on simple keyword matching, since no AI provider is connected — treat it as a rough guide rather than detailed feedback. Add an API key in Settings for full AI-generated coaching.",
     recommendedNextStep
   };
