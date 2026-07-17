@@ -424,7 +424,8 @@ const App = {
   // getSessionMemoryKey() below is that hook — currently always returns
   // null (meaning "session-only, no persistence"), deliberately unused by
   // anything else yet.
-  lastActivityAt: Date.now()
+  lastActivityAt: Date.now(),
+  scenarioGeneration: 0 // incremented on every newScenario() call — see the long comment there for why
 };
 function getSessionMemoryKey(){
   // Returns null today (no individual logins to key persistence off) — a
@@ -2628,7 +2629,25 @@ async function newScenario(){
   el('#rep-name-badge').classList.remove('hidden');
   Leaderboard.rememberName(repName);
 
-  el('#btn-new-scenario').disabled = true;
+  // Generation-token guard: a real, user-triggerable bug was found where
+  // clicking "New Scenario" a second time (e.g. an impatient double-click,
+  // or clicking it again from the active-call view while a prior request
+  // was still generating) could let the SECOND request's async profile
+  // silently overwrite Coach.profile out from under an already-started
+  // conversation — the chat history stayed from the FIRST scenario, but the
+  // persona/company silently became the SECOND one mid-conversation, with
+  // no visible reset or warning. App.scenarioGeneration increments on every
+  // call; each call captures its own number and checks it's still the
+  // latest before touching any shared state after the async gap — a
+  // superseded (stale) response is discarded entirely instead of applied.
+  App.scenarioGeneration = (App.scenarioGeneration || 0) + 1;
+  const myGeneration = App.scenarioGeneration;
+  const setGenerationButtonsDisabled = (disabled) => {
+    ['btn-new-scenario','btn-refresh-scenario','btn-refresh-scenario-2'].forEach(id=>{
+      const b = el('#'+id); if(b) b.disabled = disabled;
+    });
+  };
+  setGenerationButtonsDisabled(true);
   el('#btn-new-scenario').textContent = 'Generating…';
   Coach.active = true; Coach.messages = []; Coach.turnScores = []; Coach.ended = false; Coach.usedHints = new Set(); Coach.conversationState = freshConversationState();
   clearTimeout(Coach.hintNudgeTimer); clearTimeout(Coach.inactivityEndTimer);
@@ -2648,13 +2667,21 @@ async function newScenario(){
     try{ profile = await generateProfileViaAPI(difficulty, selectedIndustry, selectedRole, selectedSize); }
     catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize); }
   }
+  if(myGeneration !== App.scenarioGeneration){
+    // A newer "New Scenario" request has started since this one began —
+    // this response is stale. Discard it silently rather than let it
+    // clobber whatever the newer request has already set up; the newer
+    // call's own completion (or the newer call still in flight) owns the
+    // button/state cleanup, so this stale call does nothing further.
+    return;
+  }
   Coach.profile = profile; Coach.mode = mode;
   updateVoiceForCurrentPersona();
   setModeBadge(mode);
 
   el('#coach-idle').classList.add('hidden');
   el('#coach-active').classList.remove('hidden');
-  el('#btn-new-scenario').disabled = false;
+  setGenerationButtonsDisabled(false);
   el('#btn-new-scenario').textContent = 'Generate New Scenario →';
 
   renderProfileCard();
@@ -2663,6 +2690,7 @@ async function newScenario(){
   showTyping();
   await wait(typingDelayFor(profile.openingLine) * 0.4); // shorter than a full reply — it's just "Hello?"
   hideTyping();
+  if(myGeneration !== App.scenarioGeneration) return; // re-check after the typing-delay wait too
   addBubble('customer', profile.openingLine, profile.persona.name);
   if(mode==='offline'){
     if(!Settings.apiKey){
@@ -3060,6 +3088,12 @@ async function sendRepMessage(){
   const text = chatInput.value.trim();
   if(!text) return;
   stopListening();
+  // Same generation-token guard as newScenario() — if the rep somehow
+  // starts a new scenario while this message is still in flight (e.g. a
+  // very slow AI response overlapping a "New Scenario" click), the
+  // response must not land in a conversation that's no longer the active
+  // one when it finally arrives.
+  const myGeneration = App.scenarioGeneration;
 
   // Duplicate/repetition check — runs BEFORE any AI/offline call, as a
   // deterministic layer shared by both engines, per the fix's core
@@ -3089,12 +3123,14 @@ async function sendRepMessage(){
 
   try{
     let result = Coach.mode==='ai' ? await roleplayTurnViaAPI(text) : localRoleplayTurn(text);
+    if(myGeneration !== App.scenarioGeneration){ hideTyping(); return; } // stale — a newer scenario has since started, discard this response
     await wait(typingDelayFor(result.reply));
     hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
     if(result.scoring){ Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece); }
   } catch(err){
+    if(myGeneration !== App.scenarioGeneration){ hideTyping(); return; } // stale — discard rather than apply an offline fallback to the wrong scenario
     hideTyping();
     addBubble('system', "Couldn't reach the AI coach (" + err.message + ") — switching to offline practice mode.");
     Coach.mode = 'offline'; setModeBadge('offline');
@@ -3106,7 +3142,7 @@ async function sendRepMessage(){
     Coach.messages.push({who:'customer', text:result.reply});
     Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece);
   }
-  Coach.busy = false; el('#btn-send').disabled = false; chatInput.focus();
+  if(myGeneration === App.scenarioGeneration){ Coach.busy = false; el('#btn-send').disabled = false; chatInput.focus(); }
 }
 // Keeps Coach.conversationState up to date after every real (non-duplicate)
 // exchange, so later turns — and the final scorecard — can see what's
