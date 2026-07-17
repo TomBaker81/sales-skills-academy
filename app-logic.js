@@ -408,7 +408,31 @@ loadSettings();
 /* =========================================================================
    APP STATE
    ========================================================================= */
-const App = { view:'home', qual:{ pieceId:null, nodeId:'start', notes:[], gatePassed:false, revealedOption:null }, sessionLog:[], repName:'' };
+const App = {
+  view:'home', qual:{ pieceId:null, nodeId:'start', notes:[], gatePassed:false, revealedOption:null }, sessionLog:[], repName:'',
+  // Session-memory scoping: everything under App.qual and Coach (see below)
+  // is deliberately kept as plain in-memory JS state, NOT written to
+  // localStorage/sessionStorage — so it's scoped to a single browser tab's
+  // session, resets automatically on refresh, and is never shared between
+  // the different people using this one shared login. lastActivityAt below
+  // drives an explicit 2-hour idle reset for tabs left open indefinitely.
+  // FUTURE HOOK (not implemented — this app currently has one shared login,
+  // not individual accounts): if per-user accounts are added later, this is
+  // the natural place to swap in a per-user persisted state, e.g. keyed by
+  // a real user ID and stored server-side (Netlify Blobs, same mechanism
+  // already used for the shared Leaderboard) instead of resetting on idle.
+  // getSessionMemoryKey() below is that hook — currently always returns
+  // null (meaning "session-only, no persistence"), deliberately unused by
+  // anything else yet.
+  lastActivityAt: Date.now()
+};
+function getSessionMemoryKey(){
+  // Returns null today (no individual logins to key persistence off) — a
+  // real implementation would return something like `user:${userId}` once
+  // accounts exist, and callers would use it to load/save state via a
+  // Netlify Blobs-backed endpoint instead of resetting on idle/refresh.
+  return null;
+}
 
 // Generic distractor questions for the "which question would you ask" gate —
 // these represent poor discovery technique in the abstract (closed/leading,
@@ -1228,7 +1252,21 @@ function parseGeminiResponse(data){
   if(!text) throw new Error('No text content in Gemini response');
   return text;
 }
+// Retries once on a 429 (rate-limited) response before giving up — genuinely
+// useful once several people are using the same shared API key at once,
+// since a single rejected request no longer has to immediately drop that
+// rep to offline mode; most 429s clear within a second or two.
 async function callGemini(system, messages, maxTokens){
+  try{
+    return await callGeminiOnce(system, messages, maxTokens);
+  } catch(err){
+    const is429 = err.message && /Gemini API error 429/.test(err.message);
+    if(!is429) throw err;
+    await wait(1200 + Math.random()*800); // small jitter so multiple concurrently-rate-limited tabs don't retry in lockstep
+    return await callGeminiOnce(system, messages, maxTokens);
+  }
+}
+async function callGeminiOnce(system, messages, maxTokens){
   const contents = messages.map(m=>({ role: m.role==='assistant' ? 'model' : 'user', parts:[{text:m.content}] }));
   // Newer Gemini models "think" by default, and those internal reasoning
   // tokens are drawn from the SAME maxOutputTokens budget as the visible
@@ -2886,6 +2924,32 @@ function syncContextSelectors(){
   if(el('#ctx-relationship-select')) el('#ctx-relationship-select').value = c.relationship || 'prospect';
 }
 populateScenarioSelectors();
+
+/* ---------- Session idle timeout (2 hours) ----------
+   If a tab is left open indefinitely with no interaction, reset the
+   in-memory session state (Focus Area Playbook progress, Virtual Sales
+   Call conversation/turn history) as if the page had been freshly loaded —
+   without forcing a full reload, since the person may just be mid-thought.
+   Does NOT touch localStorage preferences (rep name, AI settings) or the
+   shared Leaderboard, which are intentionally persistent. */
+const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+['click','keydown','mousemove','touchstart'].forEach(evt=>{
+  document.addEventListener(evt, ()=>{ App.lastActivityAt = Date.now(); }, { passive:true });
+});
+function resetIdleSession(){
+  if(Coach.active){
+    Coach.active=false; Coach.mode=null; Coach.profile=null; Coach.messages=[]; Coach.turnScores=[];
+    Coach.ended=false; Coach.conversationState = freshConversationState();
+  }
+  App.qual = { pieceId:null, nodeId:'start', notes:[], gatePassed:false, revealedOption:null };
+  App.lastActivityAt = Date.now();
+  setView('home');
+}
+setInterval(()=>{
+  if(Date.now() - App.lastActivityAt > IDLE_TIMEOUT_MS){
+    resetIdleSession();
+  }
+}, 5 * 60 * 1000); // check every 5 minutes — no need to check more often for a 2-hour window
 function addHintBubble(hint, auto){
   const empty = el('#chat-empty'); if(empty) empty.remove();
   const scroll = el('#chat-scroll');
