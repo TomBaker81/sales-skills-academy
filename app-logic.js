@@ -814,10 +814,18 @@ function contextualiseQuestion(baseQ, pieceId, context, stage){
   if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)){
     return `${baseQ} — or if that's more your IT/technical side, who'd usually own that conversation?`;
   }
-  // Build from the per-piece, per-stage template (falling back to the
-  // original base question if this piece/stage has no template defined,
-  // e.g. the "choice" follow-up nodes, which aren't stage-typed the same way).
-  const template = stage && PIECE_STAGE_TEMPLATES[pieceId] && PIECE_STAGE_TEMPLATES[pieceId][stage];
+  // Build from the per-piece, per-stage template — but ONLY for the genuine
+  // primary question of that stage. Follow-up questions ("ask one more...")
+  // have their own distinct, already-written text; templating them here
+  // would silently overwrite that text with the SAME template used for the
+  // primary question (since both share the same stage), collapsing two
+  // deliberately different questions into identical output. This was a
+  // real, confirmed bug: a rep who set an industry would see the primary
+  // and follow-up Situation question come out word-for-word identical.
+  const piece = PIECE_BY_ID[pieceId];
+  const isFollowUp = piece && [piece.situationFollowUp, piece.problemFollowUp, piece.implicationFollowUp, piece.needpayoffFollowUp]
+    .some(fu => fu && fu.q === baseQ);
+  const template = !isFollowUp && stage && PIECE_STAGE_TEMPLATES[pieceId] && PIECE_STAGE_TEMPLATES[pieceId][stage];
   let q = template ? fillTemplate(template, INDUSTRY_CONTEXT[context.industry] || GENERIC_CONTEXT_VARS) : baseQ;
   // Role framing add-on (only when the role DOES own this piece — the
   // no-ownership case already returned above).
