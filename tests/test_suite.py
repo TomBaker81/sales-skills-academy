@@ -100,8 +100,23 @@ def main():
         for piece in PIECE_IDS:
             ctx = {"industry": None, "contactRole": None, "orgSize": None, "relationship": "existing-customer",
                    "existingProducts": [piece], "incumbentSupplier": "", "focusArea": None, "difficulty": "warm"}
-            q = page.evaluate("(a) => contextualiseQuestion('BASE', a[0], a[1], 'situation')", [piece, ctx])
+            # Use the REAL primary question text (tree.start.q) — the override is deliberately
+            # scoped to only the genuine, unambiguous entry point after a real bug was found
+            # where a generic override fired for branch-specific nodes too, silently replacing
+            # their own distinct authored text.
+            q = page.evaluate("(a) => { const p = PIECE_BY_ID[a[0]]; return contextualiseQuestion(p.tree.start.q, a[0], a[1], 'situation'); }", [piece, ctx])
             check(f"Existing-product override fires for {piece}", "already with us" in q.lower(), q)
+
+        # ---------- 4b. Existing-product override does NOT fire for branch-specific nodes ----------
+        print("\n=== Existing-product override correctly scoped (regression for the reported bug) ===")
+        result = page.evaluate("""() => {
+            const piece = PIECE_BY_ID['cyber-assurance'];
+            const node = piece.tree['competitive_probe'];
+            const ctx = {industry: null, contactRole: null, orgSize: null, relationship: 'existing-customer',
+                existingProducts: ['cyber-assurance'], incumbentSupplier: '', focusArea: null, difficulty: 'warm'};
+            return { original: node.q, output: contextualiseQuestion(node.q, 'cyber-assurance', ctx, node.type) };
+        }""")
+        check("Branch-specific node keeps its own text even with existing-product set", result['original'] == result['output'], str(result))
 
         # ---------- 5. No-pain / low-impact pivot state classification ----------
         print("\n=== Pivot state classification ===")

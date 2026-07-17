@@ -823,55 +823,55 @@ const ROLE_FRAMING_SUFFIX = {
 // existing-product modifier, assembled at render time from a small set of
 // templates and variables rather than needing a bespoke pre-written
 // question for every industry/role/size/product combination.
+//
+// IMPORTANT SCOPE NOTE (found via a real, reported bug): trees are NOT just
+// "one primary question + one follow-up" per stage — they contain many
+// branch-specific nodes (e.g. a "competitive_probe" problem-stage node with
+// its own distinct, carefully-authored question, reached via a particular
+// earlier answer). Applying a generic per-stage template to ANY node of
+// that stage type — as this function used to — silently overwrote those
+// branch nodes' real text with unrelated templated text, while the node's
+// OWN answer options (and therefore the customer's reveal) stayed as
+// originally authored. The visible symptom: a plausible-sounding,
+// industry-flavoured question paired with a completely unrelated answer,
+// because the question shown didn't actually belong to the node being
+// played. Fix: template substitution now ONLY applies to the single,
+// unambiguous situation-stage entry point (tree.start) that exists
+// identically in every piece — every other node (all of problem,
+// implication, needpayoff, and any non-start situation branch) keeps its
+// own authored text untouched. Safety/role overrides below still apply
+// everywhere since they only APPEND to or replace with a role-appropriate
+// clause using the real baseQ, never blindly swap in unrelated text.
 function contextualiseQuestion(baseQ, pieceId, context, stage){
   context = context || App.context;
-  // Determine ONCE, upfront, whether this is a genuine follow-up question
-  // (its own distinct pre-authored text) versus the primary question for
-  // this stage — every override below must respect this distinction, since
-  // treating a follow-up the same as its primary (same stage, same overrides)
-  // is exactly the class of bug found in this piece: two deliberately
-  // different questions collapsing into identical displayed text.
   const piece = PIECE_BY_ID[pieceId];
-  const isFollowUp = piece && [piece.situationFollowUp, piece.problemFollowUp, piece.implicationFollowUp, piece.needpayoffFollowUp]
-    .some(fu => fu && fu.q === baseQ);
+  const isTruePrimaryEntry = piece && stage === 'situation' && piece.tree && piece.tree.start && piece.tree.start.q === baseQ;
   // Existing-product modifier: if they already have this piece from us, the
   // question should be about satisfaction/renewal, not "do you have this at
-  // all" — a fundamentally different (and much more natural) question.
-  // Stage-aware AND follow-up-aware, for the same reason.
-  if(context.existingProducts && context.existingProducts.includes(pieceId)){
-    const EXISTING_PRODUCT_BY_STAGE = {
-      situation: "Since you're already with us on this — how's that actually working out day to day, and is it still the right fit as you've grown?",
-      problem: "Has anything about that come up short recently, or not quite worked the way you expected?",
-      implication: "If that gap carried on, what would it actually cost you or put at risk?",
-      needpayoff: "If we tightened that up, is that something worth prioritising at your next review?"
-    };
-    const EXISTING_PRODUCT_FOLLOWUP_BY_STAGE = {
-      situation: "And has anything changed recently that might affect that — new sites, more staff, different requirements?",
-      problem: "Is that a one-off, or has it happened more than once?",
-      implication: "Does that reach any further — cost, compliance, or how it looks to your own customers?",
-      needpayoff: "Would it help to have that reviewed properly rather than left as-is?"
-    };
-    const table = isFollowUp ? EXISTING_PRODUCT_FOLLOWUP_BY_STAGE : EXISTING_PRODUCT_BY_STAGE;
-    return table[stage] || table.situation;
+  // all" — a fundamentally different (and much more natural) question. Only
+  // swaps in the generic stage-keyed line for the true primary entry point;
+  // every other node keeps its own authored question (still a reasonable
+  // question to ask an existing customer, just not re-worded generically).
+  if(context.existingProducts && context.existingProducts.includes(pieceId) && isTruePrimaryEntry){
+    return "Since you're already with us on this — how's that actually working out day to day, and is it still the right fit as you've grown?";
   }
   // Role modifier: if the selected contact's role wouldn't plausibly own or
   // discuss this piece in depth, don't ask the technical version at all —
   // surface the ownership question itself instead of assuming, say, a
-  // Finance Director can discuss firewall configuration. Uses baseQ, which
-  // already differs between primary and follow-up, so this stays distinct.
+  // Finance Director can discuss firewall configuration. Uses the real
+  // baseQ for this exact node, so it always stays distinct per node.
   if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)){
     return `${baseQ} — or if that's more your IT/technical side, who'd usually own that conversation?`;
   }
-  // Build from the per-piece, per-stage template — but ONLY for the genuine
-  // primary question of that stage. Follow-up questions ("ask one more...")
-  // have their own distinct, already-written text; templating them here
-  // would silently overwrite that text with the SAME template used for the
-  // primary question (since both share the same stage), collapsing two
-  // deliberately different questions into identical output.
-  const template = !isFollowUp && stage && PIECE_STAGE_TEMPLATES[pieceId] && PIECE_STAGE_TEMPLATES[pieceId][stage];
+  // Build from the per-piece, per-stage template — ONLY for the one
+  // unambiguous primary entry point (see the long comment above this
+  // function). Every other node — follow-ups, branch-specific probes,
+  // anything not literally tree.start — keeps its own real authored text.
+  const template = isTruePrimaryEntry && PIECE_STAGE_TEMPLATES[pieceId] && PIECE_STAGE_TEMPLATES[pieceId][stage];
   let q = template ? fillTemplate(template, INDUSTRY_CONTEXT[context.industry] || GENERIC_CONTEXT_VARS) : baseQ;
   // Role framing add-on (only when the role DOES own this piece — the
-  // no-ownership case already returned above).
+  // no-ownership case already returned above). This only APPENDS to
+  // whatever q already is, so it's safe on any node, not just the primary.
   if(context.contactRole && (stage==='problem' || stage==='implication')){
     const suffix = ROLE_FRAMING_SUFFIX[context.contactRole] && ROLE_FRAMING_SUFFIX[context.contactRole][stage];
     if(suffix) q = q + suffix;
