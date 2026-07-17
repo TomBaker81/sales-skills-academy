@@ -801,16 +801,40 @@ const ROLE_FRAMING_SUFFIX = {
 // question for every industry/role/size/product combination.
 function contextualiseQuestion(baseQ, pieceId, context, stage){
   context = context || App.context;
+  // Determine ONCE, upfront, whether this is a genuine follow-up question
+  // (its own distinct pre-authored text) versus the primary question for
+  // this stage — every override below must respect this distinction, since
+  // treating a follow-up the same as its primary (same stage, same overrides)
+  // is exactly the class of bug found in this piece: two deliberately
+  // different questions collapsing into identical displayed text.
+  const piece = PIECE_BY_ID[pieceId];
+  const isFollowUp = piece && [piece.situationFollowUp, piece.problemFollowUp, piece.implicationFollowUp, piece.needpayoffFollowUp]
+    .some(fu => fu && fu.q === baseQ);
   // Existing-product modifier: if they already have this piece from us, the
   // question should be about satisfaction/renewal, not "do you have this at
   // all" — a fundamentally different (and much more natural) question.
+  // Stage-aware AND follow-up-aware, for the same reason.
   if(context.existingProducts && context.existingProducts.includes(pieceId)){
-    return `Since you're already with us on this — how's that actually working out day to day, and is it still the right fit as you've grown?`;
+    const EXISTING_PRODUCT_BY_STAGE = {
+      situation: "Since you're already with us on this — how's that actually working out day to day, and is it still the right fit as you've grown?",
+      problem: "Has anything about that come up short recently, or not quite worked the way you expected?",
+      implication: "If that gap carried on, what would it actually cost you or put at risk?",
+      needpayoff: "If we tightened that up, is that something worth prioritising at your next review?"
+    };
+    const EXISTING_PRODUCT_FOLLOWUP_BY_STAGE = {
+      situation: "And has anything changed recently that might affect that — new sites, more staff, different requirements?",
+      problem: "Is that a one-off, or has it happened more than once?",
+      implication: "Does that reach any further — cost, compliance, or how it looks to your own customers?",
+      needpayoff: "Would it help to have that reviewed properly rather than left as-is?"
+    };
+    const table = isFollowUp ? EXISTING_PRODUCT_FOLLOWUP_BY_STAGE : EXISTING_PRODUCT_BY_STAGE;
+    return table[stage] || table.situation;
   }
   // Role modifier: if the selected contact's role wouldn't plausibly own or
   // discuss this piece in depth, don't ask the technical version at all —
   // surface the ownership question itself instead of assuming, say, a
-  // Finance Director can discuss firewall configuration.
+  // Finance Director can discuss firewall configuration. Uses baseQ, which
+  // already differs between primary and follow-up, so this stays distinct.
   if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)){
     return `${baseQ} — or if that's more your IT/technical side, who'd usually own that conversation?`;
   }
@@ -819,12 +843,7 @@ function contextualiseQuestion(baseQ, pieceId, context, stage){
   // have their own distinct, already-written text; templating them here
   // would silently overwrite that text with the SAME template used for the
   // primary question (since both share the same stage), collapsing two
-  // deliberately different questions into identical output. This was a
-  // real, confirmed bug: a rep who set an industry would see the primary
-  // and follow-up Situation question come out word-for-word identical.
-  const piece = PIECE_BY_ID[pieceId];
-  const isFollowUp = piece && [piece.situationFollowUp, piece.problemFollowUp, piece.implicationFollowUp, piece.needpayoffFollowUp]
-    .some(fu => fu && fu.q === baseQ);
+  // deliberately different questions into identical output.
   const template = !isFollowUp && stage && PIECE_STAGE_TEMPLATES[pieceId] && PIECE_STAGE_TEMPLATES[pieceId][stage];
   let q = template ? fillTemplate(template, INDUSTRY_CONTEXT[context.industry] || GENERIC_CONTEXT_VARS) : baseQ;
   // Role framing add-on (only when the role DOES own this piece — the
