@@ -2348,6 +2348,15 @@ function renderQualNode(){
     const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
     const badgeLabel = badgeLabels[node.type] || '';
     const contextualQ = contextualiseQuestion(node.q, App.qual.pieceId, App.context, node.type);
+    // Memory panel — surfaces what's already been established in THIS
+    // walkthrough so far, visible DURING the conversation rather than only
+    // in the final summary, the way a real conversation naturally carries
+    // context forward from one question to the next.
+    const memoryPanelHtml = App.qual.notes.length ? `
+      <div class="memory-panel">
+        <span class="memory-panel-label">What you know so far</span>
+        <ul>${App.qual.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>
+      </div>` : '';
 
     if(!App.qual.gatePassed){
       if(!App.qual._gateChoices || App.qual._gateChoices.pieceId !== App.qual.pieceId || App.qual._gateChoices.nodeId !== App.qual.nodeId){
@@ -2362,6 +2371,7 @@ function renderQualNode(){
       body.innerHTML = `
         <div class="qcard">
           <div class="qtype-row"><span class="qtype-badge ${node.type}">${badgeLabel}</span></div>
+          ${memoryPanelHtml}
           <h3>What would you ask here?</h3>
           <div class="opt-list">
             ${choices.map((c,i)=>`<button class="opt-btn gate-opt-btn" data-idx="${i}"><span>"${esc(c.text)}"</span><span class="arrow">→</span></button>`).join('')}
@@ -2384,6 +2394,7 @@ function renderQualNode(){
       body.innerHTML = `
         <div class="qcard">
           <div class="qtype-row"><span class="qtype-badge ${node.type}">${badgeLabel}</span></div>
+          ${memoryPanelHtml}
           <h3>${esc(contextualQ)}</h3>
           <div class="customer-answer">
             <span class="ca-label">Customer says</span>
@@ -2392,7 +2403,7 @@ function renderQualNode(){
           <button class="btn btn-primary" id="btn-gate-continue">Continue →</button>
         </div>`;
       el('#btn-gate-continue').addEventListener('click', ()=>{
-        if(revealed.note) App.qual.notes.push(revealed.note);
+        App.qual.notes.push(revealed.note || revealed.label);
         App.qual.nodeId = revealed.next;
         App.qual.gatePassed = false; App.qual.revealedOption = null;
         renderQualNode();
