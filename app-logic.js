@@ -1705,7 +1705,7 @@ function renderPropensityRationale(){
       </div>
     </div>`;
 }
-const STAGE_COLORS = {situation:'#B9791F', problem:'#D98A3D', implication:'#01C088', needpayoff:'#00996C', closed:'#B54A38', other:'#8B8F99'};
+const STAGE_COLORS = {situation:'#D9860E', problem:'#E8A03D', implication:'#0FBA81', needpayoff:'#0C9C6B', closed:'#D6294A', other:'#8B8F99'};
 
 /* =========================================================================
    HOME / OVERVIEW RENDERING
@@ -1731,7 +1731,7 @@ function renderHome(){
 
   const logBody = el('#session-log-body');
   if(App.sessionLog.length===0){
-    logBody.innerHTML = '<p class="log-empty">No areas assessed yet — pick a puzzle piece above to begin.</p>';
+    logBody.innerHTML = '<p class="log-empty">No areas assessed yet — pick a focus area above to begin.</p>';
   } else {
     const list = PIECE_IDS.map(id=>{
       const best = bestLevelForPiece(id);
@@ -2059,7 +2059,7 @@ function renderQualNode(){
         ${pivotHtml}
         <div class="result-actions">
           <button class="btn btn-primary" id="btn-retry-piece">Try Different Answers</button>
-          ${pivotEligible ? `<button class="btn btn-primary" id="btn-pivot-piece">🔄 Cross-Sell: Pick a Different Focus Area</button>` : `<button class="btn btn-outline" id="btn-next-piece">Next Puzzle Piece →</button>`}
+          ${pivotEligible ? `<button class="btn btn-primary" id="btn-pivot-piece">🔄 Cross-Sell: Pick a Different Focus Area</button>` : `<button class="btn btn-outline" id="btn-next-piece">Next Focus Area →</button>`}
           <button class="btn btn-ghost" id="btn-done-piece">Back to All Pieces</button>
         </div>
       </div>`;
@@ -2281,11 +2281,11 @@ function genericHints(profile){
 function setModeBadge(mode){
   const badge = el('#mode-badge');
   if(mode==='ai'){
-    badge.innerHTML = '<span class="mode-dot" style="background:#01C088;"></span> ' + PROVIDER_DEFAULTS[Settings.provider].label + ' Live';
-    badge.style.background = '#DFF7EC'; badge.style.color = '#00996C';
+    badge.innerHTML = '<span class="mode-dot" style="background:#0FBA81;"></span> ' + PROVIDER_DEFAULTS[Settings.provider].label + ' Live';
+    badge.style.background = '#E1FAF0'; badge.style.color = '#0C9C6B';
   } else {
-    badge.innerHTML = '<span class="mode-dot" style="background:#B9791F;"></span> Offline Practice Mode';
-    badge.style.background = '#FBF0DD'; badge.style.color = '#B9791F';
+    badge.innerHTML = '<span class="mode-dot" style="background:#D9860E;"></span> Offline Practice Mode';
+    badge.style.background = '#FDF1DC'; badge.style.color = '#D9860E';
   }
 }
 
@@ -3097,10 +3097,10 @@ async function endScenario(){
   });
 }
 const RAG = {
-  qualified:{band:'green', color:'#00996C', bg:'#DFF7EC', label:'Green'},
-  developing:{band:'amber', color:'#B9791F', bg:'#FBF0DD', label:'Amber'},
-  surface:{band:'amber', color:'#B9791F', bg:'#FBF0DD', label:'Amber'},
-  none:{band:'red', color:'#B54A38', bg:'#FBEAE6', label:'Red'}
+  qualified:{band:'green', color:'#0C9C6B', bg:'#E1FAF0', label:'Green'},
+  developing:{band:'amber', color:'#D9860E', bg:'#FDF1DC', label:'Amber'},
+  surface:{band:'amber', color:'#D9860E', bg:'#FDF1DC', label:'Amber'},
+  none:{band:'red', color:'#D6294A', bg:'#FCE3E8', label:'Red'}
 };
 const SCORE_OUT_OF_10 = {none:0, surface:4, developing:7, qualified:10};
 function levelPillHTML(level){
@@ -3112,10 +3112,10 @@ function renderScorecard(data){
   const p = Coach.profile;
   el('#modal-sub').textContent = (p.companyName ? p.companyName + ' · ' : '') + p.industry + ' · ' + p.persona.name + ' (' + p.persona.role + ')';
   const overallColorMap = {
-    'Discovery Stage':{bg:'#EEF0F2', color:'#5B6272'},
-    'Developing Opportunity':{bg:'#E6F0FA', color:'#2C6FB0'},
-    'Qualified Opportunity':{bg:'#DFF7EC', color:'#00996C'},
-    'Hot Opportunity':{bg:'#23283C', color:'#01C088'}
+    'Discovery Stage':{bg:'#F0EDF8', color:'#5B6272'},
+    'Developing Opportunity':{bg:'#E8F2FD', color:'#3E8EDE'},
+    'Qualified Opportunity':{bg:'#E1FAF0', color:'#0C9C6B'},
+    'Hot Opportunity':{bg:'#1B1640', color:'#0FBA81'}
   };
   const oc = overallColorMap[data.overallLevel] || overallColorMap['Discovery Stage'];
   const banner = el('#overall-banner');
