@@ -1009,9 +1009,37 @@ const PROBLEM_OBJECTIVES = [
   ['compliance', ['complian','audit','regulat','governance','policy']],
   ['general-problem-check', ['problem','issue','trouble','difficult','goes wrong','gone wrong','pain point']]
 ];
+const IMPLICATION_OBJECTIVES = [
+  ['financial-cost', ['cost','expensive','budget','spend','money','financ']],
+  ['productivity', ['productiv','time','hours','staff time','team time','slow them down']],
+  ['customer-experience', ['customer','client','guest','patient','reputation with']],
+  ['security-compliance', ['security','complian','audit','regulat','governance','exposure','risk']],
+  ['management-time', ['management time','manager\u2019s time','chasing','follow up','follow-up']],
+  ['growth-limitation', ['grow','scale','expansion','can\u2019t keep up','outgrown']],
+  ['service-availability', ['availability','uptime','downtime','outage','access removed','stay up']],
+  ['reputational-risk', ['reputation','trust','perception','looks bad','public']],
+  ['operational-disruption', ['disrupt','workflow','day to day','day-to-day']],
+  ['general-impact-check', ['impact','affect','effect','consequence']]
+];
+const NEEDPAYOFF_OBJECTIVES = [
+  ['reduced-cost', ['cost','save money','reduce spend','cheaper','budget']],
+  ['improved-visibility', ['visibility','see what','dashboard','report','track']],
+  ['reduced-risk', ['risk','safer','secure','exposure','vulnerab']],
+  ['faster-onboarding', ['onboard','offboard','set up new','remove access','enrolment','enrollment']],
+  ['better-customer-service', ['customer','client','guest','patient','service level']],
+  ['resilience', ['resilien','robust','recover','disaster','continuity']],
+  ['easier-management', ['easier','simpler','manage','administer','less hassle']],
+  ['compliance', ['complian','audit','governance','regulat']],
+  ['growth-capacity', ['grow','scale','expansion','support growth']],
+  ['reduced-dependency', ['depend','reliance','rely on','provider','supplier']],
+  ['general-value-check', ['valuable','value','useful','worth','benefit','worthwhile']]
+];
 function classifyObjective(text, stage){
   const lower = text.toLowerCase().replace(/[\u2019']/g, '\u2019');
-  const table = stage === 'problem' ? PROBLEM_OBJECTIVES : SITUATION_OBJECTIVES;
+  const table = stage === 'problem' ? PROBLEM_OBJECTIVES
+    : stage === 'implication' ? IMPLICATION_OBJECTIVES
+    : stage === 'needpayoff' ? NEEDPAYOFF_OBJECTIVES
+    : SITUATION_OBJECTIVES;
   for(const [tag, keywords] of table){
     if(keywords.some(k => lower.includes(k))) return tag;
   }
@@ -1021,14 +1049,40 @@ function classifyObjective(text, stage){
 function freshConversationState(){
   return {
     questionsAsked: [],       // [{text, words, stage, piece, objective, turnIndex}]
-    confirmedFacts: [],        // [{piece, fact, turnIndex}] — things established as true
+    confirmedFacts: [],        // [{piece, fact, turnIndex}] — current-situation facts established as true
+    confirmedProblems: [],     // [{piece, fact, turnIndex}]
+    confirmedImpacts: [],      // [{piece, fact, turnIndex}]
+    desiredOutcomes: [],       // [{piece, fact, turnIndex}]
     ruledOutIssues: [],        // [{piece, note}]
     painAreas: [],             // [{piece, severity, turnIndex}]
     sentimentTrack: [],        // [{turnIndex, sentiment}] — tracked SEPARATELY from facts
     stagePerPiece: {},         // pieceId -> highest stage reached with confirmation
+    // Per-piece, per-dimension state (e.g. {piece:'support-services', dimensions:{'general-problem-check':'negative','ownership':'positive'}}) —
+    // lets the SAME piece hold both a positive and negative sub-state at once (spec section 8), rather than one flag per piece.
+    dimensionStates: {},
     stakeholdersRaised: [],
-    contradictionsFlagged: []
+    contradictionsFlagged: [],
+    answersGiven: []           // raw reply texts already used, per pool, so the offline engine never gives the exact same generic line twice
   };
+}
+// Records which pool-index was used for a given generic reply pool, so the
+// offline engine prefers an unused entry next time rather than risking an
+// exact repeat of the same generic line for two different questions.
+function pickUnusedReply(pool, poolName, state){
+  const used = state.answersGiven.filter(a => a.pool === poolName).map(a => a.index);
+  const unusedIdx = pool.map((_, i) => i).filter(i => !used.includes(i));
+  const idx = unusedIdx.length ? unusedIdx[Math.floor(Math.random()*unusedIdx.length)] : Math.floor(Math.random()*pool.length);
+  state.answersGiven.push({ pool: poolName, index: idx });
+  return pool[idx];
+}
+// Updates the per-piece, per-dimension positive/negative state — the finer-
+// grained tracking spec section 8 asks for, so a piece can be simultaneously
+// "positive" on one dimension and "negative" on another rather than
+// collapsing to one flag.
+function updateDimensionState(pieceId, objective, sentiment, state){
+  if(!pieceId) return;
+  if(!state.dimensionStates[pieceId]) state.dimensionStates[pieceId] = {};
+  state.dimensionStates[pieceId][objective] = sentiment; // 'positive' | 'negative' | 'unknown'
 }
 
 // The core duplicate check — runs before ANY engine call. Flags a question
@@ -1056,7 +1110,10 @@ function detectDuplicateQuestion(text, piece, stage, state){
 // rejection message can point somewhere genuinely new rather than just
 // saying "try again".
 function suggestUncoveredObjective(piece, stage, state){
-  const table = stage === 'problem' ? PROBLEM_OBJECTIVES : SITUATION_OBJECTIVES;
+  const table = stage === 'problem' ? PROBLEM_OBJECTIVES
+    : stage === 'implication' ? IMPLICATION_OBJECTIVES
+    : stage === 'needpayoff' ? NEEDPAYOFF_OBJECTIVES
+    : SITUATION_OBJECTIVES;
   const covered = new Set(state.questionsAsked.filter(q=>q.stage===stage && (!piece || !q.piece || q.piece===piece)).map(q=>q.objective));
   const uncovered = table.find(([tag]) => !covered.has(tag));
   return uncovered ? uncovered[0].replace(/-/g,' ') : null;
@@ -1066,8 +1123,9 @@ function suggestUncoveredObjective(piece, stage, state){
 // engine's own richer questionType scoring, which still runs afterwards.
 function preClassifyStage(text){
   const lower = text.toLowerCase();
-  if(/would (that|it|this) (help|be worth)|if we could|make sense to (look|explore)|want(ed)? to (fix|sort|solve)/.test(lower)) return 'needpayoff';
-  if(/what would that (cost|mean)|what does that (cost|mean)|impact|what happens if|how much (does|would)|knock.on effect/.test(lower)) return 'implication';
+  if(/\bwould\b.{0,40}\b(valuable|value|useful|worth it|worthwhile|benefit|helpful|help)\b/.test(lower) ||
+     /if we could|make sense to (look|explore)|want(ed)? to (fix|sort|solve)|how (useful|valuable) would|how would that (help|improve)/.test(lower)) return 'needpayoff';
+  if(/what would that (cost|mean)|what does that (cost|mean)|\bimpact\b|what happens if|how much (does|would)|cost of (that|this|the)|knock.on effect|\baffect(s|ing)?\b|\beffect\b|consequence|knock on|(create|cause)s?\b.{0,30}\b(risk|exposure|problem)/.test(lower)) return 'implication';
   if(/\bissue|\bproblem|frustrat|trouble|difficult|concern|pain point|goes wrong|gone wrong/.test(lower)) return 'problem';
   return 'situation';
 }
@@ -2957,17 +3015,32 @@ function updateConversationStateFromScoring(scoring, piece){
   const targetPiece = scoring.piece || piece;
   if(!targetPiece) return;
   const level = scoring.qualification;
-  if(level === 'qualified' || level === 'developing'){
+  const stage = scoring.questionType;
+  const positive = level === 'qualified' || level === 'developing';
+  if(positive){
     state.painAreas.push({ piece: targetPiece, severity: level, turnIndex });
-    state.confirmedFacts.push({ piece: targetPiece, fact: `Pain confirmed at ${level} level`, turnIndex });
+    // Route the confirmed fact into the stage-appropriate bucket, matching
+    // the spec's richer categorised state (current-situation / confirmed
+    // problems / confirmed impacts / desired outcomes), not one flat list.
+    const fact = { piece: targetPiece, fact: `Pain confirmed at ${level} level (${stage||'general'})`, turnIndex };
+    if(stage === 'problem') state.confirmedProblems.push(fact);
+    else if(stage === 'implication') state.confirmedImpacts.push(fact);
+    else if(stage === 'needpayoff') state.desiredOutcomes.push(fact);
+    else state.confirmedFacts.push(fact);
   } else if(level === 'none' && (scoring.infoLevel||0) === 0){
     // Only mark ruled-out on a genuinely empty/deflected answer, not just a
     // low score — a "surface" answer may still contain a fact worth keeping.
     if(!state.ruledOutIssues.some(r=>r.piece===targetPiece)) state.ruledOutIssues.push({ piece: targetPiece, note: 'No pain surfaced when asked directly' });
   }
-  const currentStageRank = {situation:1, problem:2, implication:3, needpayoff:4}[scoring.questionType] || 0;
+  // Per-dimension positive/negative tracking (spec section 8) — a piece can
+  // hold a positive state on one dimension and negative on another at once.
+  const lastQuestion = state.questionsAsked.filter(q => q.piece === targetPiece && q.stage === stage).slice(-1)[0];
+  const objective = lastQuestion ? lastQuestion.objective : 'general';
+  updateDimensionState(targetPiece, objective, positive ? 'positive-signal' : 'unresolved', state);
+
+  const currentStageRank = {situation:1, problem:2, implication:3, needpayoff:4}[stage] || 0;
   const priorRank = {situation:1, problem:2, implication:3, needpayoff:4}[state.stagePerPiece[targetPiece]] || 0;
-  if(currentStageRank > priorRank) state.stagePerPiece[targetPiece] = scoring.questionType;
+  if(currentStageRank > priorRank) state.stagePerPiece[targetPiece] = stage;
 }
 el('#btn-end-scenario').addEventListener('click', ()=> endScenario());
 
@@ -3031,14 +3104,16 @@ ${pieceCriteriaBlock()}`;
 
 function buildStateSummaryForPrompt(){
   const state = Coach.conversationState;
-  if(!state.confirmedFacts.length && !state.ruledOutIssues.length) return '';
-  const parts = ['Established so far in THIS conversation — stay consistent with all of it:'];
-  if(state.confirmedFacts.length){
-    parts.push('Confirmed facts: ' + state.confirmedFacts.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
-  }
-  if(state.ruledOutIssues.length){
-    parts.push('Already ruled out / no pain found: ' + state.ruledOutIssues.map(r=>r.piece).join(', '));
-  }
+  const hasAny = state.confirmedFacts.length || state.confirmedProblems.length || state.confirmedImpacts.length ||
+    state.desiredOutcomes.length || state.ruledOutIssues.length || state.questionsAsked.length;
+  if(!hasAny) return '';
+  const parts = ['Established so far in THIS conversation — stay consistent with ALL of it, and do not repeat a question or intent already covered below:'];
+  if(state.confirmedFacts.length) parts.push('Current situation facts: ' + state.confirmedFacts.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.confirmedProblems.length) parts.push('Confirmed problems: ' + state.confirmedProblems.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.confirmedImpacts.length) parts.push('Confirmed impacts: ' + state.confirmedImpacts.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.desiredOutcomes.length) parts.push('Desired outcomes raised: ' + state.desiredOutcomes.map(f=>`(${f.piece}) ${f.fact}`).join('; '));
+  if(state.ruledOutIssues.length) parts.push('Already ruled out / no pain found: ' + state.ruledOutIssues.map(r=>r.piece).join(', '));
+  if(state.questionsAsked.length) parts.push('Questions and intents already covered (do not repeat these): ' + state.questionsAsked.map(q=>`"${q.text}" [${q.stage}/${q.objective}]`).join('; '));
   return parts.join('\n') + '\n';
 }
 async function roleplayTurnViaAPI(repText){
@@ -3068,16 +3143,24 @@ Your role's real knowledge boundaries — stay believable within these:
 What you actually care about day to day: ${p.whatTheyCareAbout || 'running the business smoothly and keeping customers happy'} — when you talk about any of your real issues below, frame it in terms of THIS, not abstract technology language. You're not an IT person (unless your role says otherwise) — you think in terms of guests, patients, customers, deliveries, deadlines or reputation, not "network downtime."
 You are being spoken to by a JUNIOR sales rep who is still building confidence and skill at discovery calls. This is a training exercise, so your job is to give them a fair chance to succeed appropriate to your temperament below — not to be an impossible brick wall.
 ${roleSection}
-Depth on good questions: don't just repeat the same one-line pain description every time it comes up. When the rep asks a genuinely good, well-targeted follow-up, progressively reveal MORE — operational impact, what it's actually costing the business, who else is involved or affected, roughly how long it's been going on, whether there's an existing supplier/contract in the picture, or timing pressure — the way a real conversation builds up detail across several good questions rather than dumping everything at once or stonewalling.
-Cross-selling: if the rep asks about one of your hidden-pain areas and you have genuinely nothing there (or they've already fully explored it), don't just go flat or shut the whole call down — if they then pivot to ask about a DIFFERENT area where you DO have a real hidden pain, engage with that new topic genuinely, the way a real business owner would if a good rep tried a different angle instead of giving up. Rewarding a sensible pivot is part of what this exercise is training.
 Your business's ACTUAL underlying issues are below — don't blurt these out unprompted:
 ${forthcomingByDifficulty[difficulty]}
 Hidden pains:
 ${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
 ${buildStateSummaryForPrompt()}
-CONSISTENCY IS CRITICAL: never contradict a fact already confirmed above. If the rep asks something close to a question already covered, acknowledge that briefly ("as I said...") and either reinforce the same answer or add a genuinely NEW dimension — never reverse your position just because the wording changed. You may legitimately describe a DIFFERENT part of the same area differently (e.g. "enrolment is fine, but reporting is a mess") — that is not a contradiction, it's a new dimension, and should be framed as such.
-SPIN ORDER: if the rep asks an Implication-style question ("what would that cost you") before any real Problem has been confirmed on that topic, don't invent an impact — gently note there isn't really a confirmed problem to build on yet, and let them know a more basic question would help first. Likewise don't hand over a Need-payoff-style resolution before a real impact has been established.
-Stay fully in character, realistic, 1 to 4 sentences per reply. Never break character or mention this is a simulation.
+Before replying, work through this checklist in order:
+1. Stay anchored to the stable persona, company and hidden-pain facts above — they never change mid-conversation.
+2. Treat everything in the "Established so far" block above as fixed truth — never contradict it.
+3. Check the "Questions and intents already covered" list — if the rep's latest message repeats one of those intents, acknowledge that briefly ("as I mentioned...") rather than answering as if it were new.
+4. Note which SPIN stage the conversation is actually at for the relevant topic, and don't hand over Implication-level impact or Need-payoff-level resolution before the earlier stage has genuinely been established.
+5. Read the rep's LATEST message and identify its specific intent (current process, ownership, scale, frequency, dissatisfaction, root cause, operational impact, financial impact, risk, customer impact, urgency, desired outcome, stakeholder, supplier, contract position, or next-step interest).
+6. Answer ONLY that intent — if they ask about cost, answer with cost/time detail, not a generic re-description of the setup.
+7. Don't repeat a previous answer's exact wording — add new detail (a number, a stakeholder, a timing detail, an exception) if you're touching a topic already raised, and don't add invented detail that isn't consistent with the hidden pains above.
+8. If the rep makes a STATEMENT or summary rather than a question (e.g. "so it sounds like your team doesn't have visibility on that", "you mentioned reporting was limited") — evaluate whether it's an accurate summary of what you've actually said. If accurate, confirm it briefly. If it misrepresents or assumes something you haven't said, correct it politely rather than agreeing by default.
+9. Keep the topic's direction (positive/partially-working/negative) consistent with what's already been said about that SPECIFIC dimension — a different dimension of the same area (e.g. "enrolment's fine but reporting's a mess") is a legitimate distinction, not a contradiction, and should be framed that way.
+10. Stay fully in character, realistic, 1 to 4 sentences per reply. Never break character or mention this is a simulation.
+Depth on good questions: don't just repeat the same one-line pain description every time it comes up. When the rep asks a genuinely good, well-targeted follow-up, progressively reveal MORE — operational impact, what it's actually costing the business, who else is involved or affected, roughly how long it's been going on, whether there's an existing supplier/contract in the picture, or timing pressure — the way a real conversation builds up detail across several good questions rather than dumping everything at once or stonewalling.
+Cross-selling: if the rep asks about one of your hidden-pain areas and you have genuinely nothing there (or they've already fully explored it), don't just go flat or shut the whole call down — if they then pivot to ask about a DIFFERENT area where you DO have a real hidden pain, engage with that new topic genuinely, the way a real business owner would if a good rep tried a different angle instead of giving up. Rewarding a sensible pivot is part of what this exercise is training.
 After your reply, evaluate the REP'S LAST MESSAGE for sales qualification quality against these solution focus areas and their qualification criteria:
 ${pieceCriteriaBlock()}
 Score it as:
@@ -3222,14 +3305,14 @@ function localRoleplayTurn(repText){
   // the note above, not a precise measurement.
   listening = 2; commercialJudgement = 2;
   if(hiddenPain && outsideRole && strength>=threshold){
-    reply = REFERRAL_RESPONSES[Math.floor(Math.random()*REFERRAL_RESPONSES.length)];
+    reply = pickUnusedReply(REFERRAL_RESPONSES, 'referral', state);
     qualification='developing'; relevance=2; infoLevel=4; roleFit=1; // asked outside the contact's role, but recognised well enough to still count as developing
     note = `Good, relevant question — but ${p.persona.role} likely isn't the person who owns this, so this is a moment to ask who is, or to reframe it in business terms they'd answer directly.`;
   }
   else if(hiddenPain && strength>=threshold){ reply = "Actually, yes — " + hiddenPain.detail + "."; qualification='qualified'; relevance=3; infoLevel = strength>=3 ? 3 : 2; roleFit=3; }
-  else if(hiddenPain){ reply = HINTS[Math.floor(Math.random()*HINTS.length)]; qualification='developing'; relevance=2; infoLevel=1; roleFit=2; }
-  else if(pieceId){ reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='surface'; relevance=1; infoLevel=0; roleFit=2; }
-  else { reply = DEFLECTIONS[Math.floor(Math.random()*DEFLECTIONS.length)]; qualification='none'; relevance=0; infoLevel=0; roleFit=1; }
+  else if(hiddenPain){ reply = pickUnusedReply(HINTS, 'hint', state); qualification='developing'; relevance=2; infoLevel=1; roleFit=2; }
+  else if(pieceId){ reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='surface'; relevance=1; infoLevel=0; roleFit=2; }
+  else { reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='none'; relevance=0; infoLevel=0; roleFit=1; }
   return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, infoLevel, roleFit, listening, commercialJudgement, note } };
 }
 function detectPivot(turnScores){

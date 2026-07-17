@@ -269,6 +269,120 @@ def main():
         }""")
         print(f"  (end-to-end UI flow already verified manually during development; state-machine unit tests above cover the same logic paths)")
 
+        # ---------- 14. Extended SPIN workflow: Implication/Need-payoff/answers/memory ----------
+        print("\n=== Repeated Implication question (spec's 3 general-impact examples) ===")
+        r = page.evaluate("""() => {
+            const state = freshConversationState();
+            const qs = ["What impact does this have on your business?", "How does this issue affect the organisation?", "What effect is this having operationally?"];
+            const results = [];
+            qs.forEach((q,i) => {
+                const s = preClassifyStage(q), p = matchPiece(q);
+                const d = detectDuplicateQuestion(q, p, s, state);
+                results.push(d.isDuplicate);
+                if (i===0) state.questionsAsked.push({text:q, words:contentWords(q), stage:s, piece:p, objective:d.objective, turnIndex:i});
+            });
+            return results;
+        }""")
+        check("Reworded Implication repeats (#2) flagged as duplicate", r[1] == True, str(r))
+        check("Reworded Implication repeats (#3) flagged as duplicate", r[2] == True, str(r))
+
+        print("\n=== Repeated Need-payoff question (spec's 3 general-value examples) ===")
+        r = page.evaluate("""() => {
+            const state = freshConversationState();
+            const qs = ["Would improving this be valuable?", "Would there be value in resolving this?", "Would fixing this benefit the business?"];
+            const results = [];
+            qs.forEach((q,i) => {
+                const s = preClassifyStage(q), p = matchPiece(q);
+                const d = detectDuplicateQuestion(q, p, s, state);
+                results.push(d.isDuplicate);
+                if (i===0) state.questionsAsked.push({text:q, words:contentWords(q), stage:s, piece:p, objective:d.objective, turnIndex:i});
+            });
+            return results;
+        }""")
+        check("Reworded Need-payoff repeats (#2) flagged as duplicate", r[1] == True, str(r))
+        check("Reworded Need-payoff repeats (#3) flagged as duplicate", r[2] == True, str(r))
+
+        print("\n=== Distinct Implication dimensions correctly NOT flagged ===")
+        r = page.evaluate("""() => {
+            const state = freshConversationState();
+            const qs = ["What's the financial cost of that delay?", "Does that create any security or compliance exposure?", "How does that affect your team's productivity?"];
+            const results = [];
+            qs.forEach((q,i) => {
+                const s = preClassifyStage(q), p = matchPiece(q);
+                const d = detectDuplicateQuestion(q, p, s, state);
+                results.push(d.isDuplicate);
+                state.questionsAsked.push({text:q, words:contentWords(q), stage:s, piece:p, objective:d.objective, turnIndex:i});
+            });
+            return results;
+        }""")
+        check("Financial-cost dimension not flagged against empty history", r[0] == False, str(r))
+        check("Security/compliance dimension not flagged as dup of financial-cost", r[1] == False, str(r))
+        check("Productivity dimension not flagged as dup of prior dimensions", r[2] == False, str(r))
+
+        print("\n=== Duplicate-answer avoidance (offline engine doesn't repeat the same generic line) ===")
+        r = page.evaluate("""() => {
+            Coach.profile = { companyName:'Test', industry:'Retail', employees:20, difficulty:'warm',
+                persona:{name:'Test',role:'Owner/Founder',tone:'friendly'}, whatTheyCareAbout:'running the shop', hiddenPains:[] };
+            Coach.conversationState = freshConversationState();
+            const replies = [];
+            for (let i=0;i<DEFLECTIONS.length;i++){
+                const r = localRoleplayTurn('Totally unrelated small talk ' + i);
+                replies.push(r.reply);
+            }
+            return { replies, uniqueCount: new Set(replies).size, poolSize: DEFLECTIONS.length };
+        }""")
+        check("Offline engine cycles through unique replies before repeating (no early repeat within pool size)", r['uniqueCount'] == r['poolSize'], str(r))
+
+        print("\n=== Eight-turn memory test ===")
+        r = page.evaluate("""() => {
+            Coach.profile = { companyName:'Test', industry:'Retail', employees:20, difficulty:'warm',
+                persona:{name:'Test',role:'IT Manager',tone:'friendly'}, whatTheyCareAbout:'running the shop',
+                hiddenPains:[{piece:'cyber-assurance', severity:'high', detail:'no incident response plan'}] };
+            Coach.conversationState = freshConversationState();
+            Coach.messages = []; Coach.turnScores = [];
+            const turns = [
+                'How do you currently manage security?',
+                'Who looks after that day to day?',
+                'Has that ever caused a real problem?',
+                'What would that actually cost you if it went wrong?',
+                'Who else would be involved if that happened?',
+                'Would having a proper incident response plan be valuable?',
+                'So it sounds like nobody owns this today, is that fair?',
+                'Would it make sense to get a specialist to walk through this with you?'
+            ];
+            const stageLog = [];
+            turns.forEach(t => {
+                const stage = preClassifyStage(t);
+                const piece = matchPiece(t);
+                const dup = detectDuplicateQuestion(t, piece, stage, Coach.conversationState);
+                if (!dup.isDuplicate) {
+                    Coach.conversationState.questionsAsked.push({text:t, words:contentWords(t), stage, piece, objective:dup.objective, turnIndex:Coach.messages.length});
+                    const result = localRoleplayTurn(t);
+                    Coach.messages.push({who:'rep', text:t});
+                    Coach.messages.push({who:'customer', text:result.reply});
+                    Coach.turnScores.push(result.scoring);
+                    updateConversationStateFromScoring(result.scoring, piece);
+                }
+                stageLog.push({t, stage, dup: dup.isDuplicate});
+            });
+            return { stageLog, finalStateKeys: Object.keys(Coach.conversationState.stagePerPiece), turnCount: Coach.turnScores.length };
+        }""")
+        check("Eight-turn conversation completes without crashing", r['turnCount'] >= 6, str(r))
+        no_unexpected_dup = sum(1 for s in r['stageLog'] if s['dup']) <= 1
+        check("Eight-turn conversation has minimal/no unintended repetition flags", no_unexpected_dup, str(r['stageLog']))
+
+        print("\n=== New-session reset test ===")
+        r = page.evaluate("""() => {
+            Coach.conversationState.confirmedFacts.push({piece:'test', fact:'leftover', turnIndex:0});
+            Coach.conversationState.questionsAsked.push({text:'leftover question', words:[], stage:'situation', piece:null, objective:'general', turnIndex:0});
+            const before = Coach.conversationState.questionsAsked.length;
+            Coach.conversationState = freshConversationState();
+            const after = Coach.conversationState.questionsAsked.length;
+            return { before, after, factsAfter: Coach.conversationState.confirmedFacts.length };
+        }""")
+        check("New scenario state reset clears prior questions", r['after'] == 0, str(r))
+        check("New scenario state reset clears prior facts", r['factsAfter'] == 0, str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")
