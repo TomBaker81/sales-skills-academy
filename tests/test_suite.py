@@ -398,6 +398,191 @@ def main():
         check("New scenario state reset clears prior questions", r['after'] == 0, str(r))
         check("New scenario state reset clears prior facts", r['factsAfter'] == 0, str(r))
 
+        # ---------- 15. AI-vs-offline structural parity ----------
+        # The two engines share single-source-of-truth constants for the
+        # per-turn scoring schema and the difficulty multiplier. These checks
+        # fail if either engine (or the AI prompt text generated from the
+        # constants) drifts from that shared definition.
+        print("\n=== Parity: offline scoring object matches TURN_SCORING_KEYS ===")
+        r = page.evaluate("""() => {
+            Coach.profile = { companyName:'Test', industry:'Retail', employees:20, difficulty:'warm',
+                persona:{name:'Test',role:'Owner/Founder',tone:'friendly'}, whatTheyCareAbout:'x',
+                hiddenPains:[{piece:'m365', severity:'high', detail:'licensing mess'}] };
+            Coach.conversationState = freshConversationState();
+            const result = localRoleplayTurn('How do you manage your Microsoft licences today?');
+            const offlineKeys = Object.keys(result.scoring).sort();
+            return { offlineKeys, expected: TURN_SCORING_KEYS.slice().sort() };
+        }""")
+        check("Offline engine emits exactly the shared TURN_SCORING_KEYS", r['offlineKeys'] == r['expected'], str(r))
+
+        print("\n=== Parity: AI prompt schema line contains every shared key ===")
+        r = page.evaluate("""() => {
+            const line = turnScoringSchemaLine();
+            const missing = TURN_SCORING_KEYS.filter(k => !line.includes('"'+k+'"'));
+            return { missing, line };
+        }""")
+        check("AI JSON schema line covers all TURN_SCORING_KEYS", len(r['missing']) == 0, str(r['missing']))
+
+        print("\n=== Parity: difficulty multiplier clause generated from the shared constant ===")
+        r = page.evaluate("""() => {
+            const clause = difficultyMultiplierClause();
+            const ok = Object.entries(DIFFICULTY_SCORE_MULTIPLIER).every(([k,v]) => clause.includes(String(v)) && clause.includes('"'+k+'"'));
+            return { clause, ok, constants: DIFFICULTY_SCORE_MULTIPLIER };
+        }""")
+        check("AI prompt multiplier clause reflects DIFFICULTY_SCORE_MULTIPLIER exactly", r['ok'], str(r))
+
+        # ---------- 16. New dimensions: stakeholder-ID / reframing detectors ----------
+        print("\n=== Stakeholder-ask detector: realistic phrasings ===")
+        r = page.evaluate("""() => [
+            detectStakeholderAsk('Who looks after your IT security day to day?'),
+            detectStakeholderAsk('Could you introduce me to whoever handles that?'),
+            detectStakeholderAsk('Who would be the right person to speak to about the network?'),
+            detectStakeholderAsk('Would you be able to put me in touch with your IT provider?'),
+            detectStakeholderAsk('How is business going this quarter?'),
+            detectStakeholderAsk('What broadband speed do you get at the moment?')
+        ]""")
+        check("Stakeholder ask: 'who looks after' detected", r[0] == True, str(r))
+        check("Stakeholder ask: 'introduce me' detected", r[1] == True, str(r))
+        check("Stakeholder ask: 'right person' detected", r[2] == True, str(r))
+        check("Stakeholder ask: 'put me in touch' detected", r[3] == True, str(r))
+        check("Stakeholder ask: ordinary business question NOT flagged", r[4] == False, str(r))
+        check("Stakeholder ask: ordinary discovery question NOT flagged", r[5] == False, str(r))
+
+        print("\n=== Reframing detector: only counts as a RESPONSE to a misaimed turn ===")
+        r = page.evaluate("""() => {
+            const misaimedPrior = [{roleFit:1, qualification:'surface', piece:'secure-network'}];
+            const wellAimedPrior = [{roleFit:3, qualification:'developing', piece:'secure-network'}];
+            return [
+                detectReframingSignal('What does downtime like that actually cost you day to day?', misaimedPrior),
+                detectReframingSignal('What does downtime like that actually cost you day to day?', wellAimedPrior),
+                detectReframingSignal('What firewall model are you running?', misaimedPrior),
+                detectReframingSignal('How does that affect your team?', misaimedPrior)
+            ];
+        }""")
+        check("Reframe after misaimed turn detected", r[0] == True, str(r))
+        check("Business question with NO misaimed prior turn not counted as reframe", r[1] == False, str(r))
+        check("Technical re-ask after misaimed turn not counted as reframe", r[2] == False, str(r))
+        check("Impact phrasing after misaimed turn detected", r[3] == True, str(r))
+
+        # ---------- 17. Forced-selling detection ----------
+        print("\n=== Forced-selling detection ===")
+        r = page.evaluate("""() => {
+            const forced = [
+                {questionType:'closed', qualification:'none'},
+                {questionType:'situation', qualification:'surface'},
+                {questionType:'closed', qualification:'none'}
+            ];
+            const legit = [
+                {questionType:'problem', qualification:'developing'},
+                {questionType:'implication', qualification:'qualified'},
+                {questionType:'closed', qualification:'developing'}
+            ];
+            const mixed = [
+                {questionType:'closed', qualification:'none'},
+                {questionType:'problem', qualification:'developing'},
+                {questionType:'closed', qualification:'developing'}
+            ];
+            return [computeForcedSellingCount(forced), computeForcedSellingCount(legit), computeForcedSellingCount(mixed), computeForcedSellingCount([])];
+        }""")
+        check("Pitching before any need established counts as forced (x2)", r[0] == 2, str(r))
+        check("Closing after genuine qualification is NOT forced", r[1] == 0, str(r))
+        check("Only the pre-qualification close counts in a mixed call", r[2] == 1, str(r))
+        check("Empty call handled without error", r[3] == 0, str(r))
+
+        # ---------- 18. Pivot quality classification ----------
+        print("\n=== Pivot quality classification ===")
+        r = page.evaluate("""() => {
+            const evidenceLed = [
+                {piece:'cloud-voice', qualification:'none'},
+                {piece:'cyber-assurance', qualification:'developing'}
+            ];
+            const weakPivot = [
+                {piece:'cloud-voice', qualification:'none'},
+                {piece:'cyber-assurance', qualification:'surface'}
+            ];
+            const forcedContinuation = [
+                {piece:'cloud-voice', qualification:'none'},
+                {piece:'cloud-voice', qualification:'none'},
+                {piece:'cloud-voice', qualification:'none'}
+            ];
+            const abandonedLive = [
+                {piece:'cloud-voice', qualification:'surface'},
+                {piece:'cyber-assurance', qualification:'none'}
+            ];
+            const noSituation = [
+                {piece:'cloud-voice', qualification:'developing'},
+                {piece:'cloud-voice', qualification:'qualified'}
+            ];
+            return [computePivotQuality(evidenceLed), computePivotQuality(weakPivot), computePivotQuality(forcedContinuation), computePivotQuality(abandonedLive), computePivotQuality(noSituation), computePivotQuality([])];
+        }""")
+        check("Evidence-led pivot (dead end -> different area developed) scores 3", r[0] == 3, str(r))
+        check("Pivot to only-surface new area scores 2", r[1] == 2, str(r))
+        check("3+ turns forcing a dead line scores 0", r[2] == 0, str(r))
+        check("Abandoning a live area without dead-end evidence scores 1", r[3] == 1, str(r))
+        check("No dead ends and no switches -> null (not applicable)", r[4] is None, str(r))
+        check("Empty turn list -> null", r[5] is None, str(r))
+
+        # ---------- 19. Next-step score ----------
+        print("\n=== Next-step score ===")
+        r = page.evaluate("""() => [
+            computeNextStepScore([{infoLevel:5}], []),
+            computeNextStepScore([{infoLevel:3}], [{level:'qualified'}]),
+            computeNextStepScore([{infoLevel:2}], [{level:'developing'}]),
+            computeNextStepScore([{infoLevel:1}], [{level:'surface'}]),
+            computeNextStepScore([], [])
+        ]""")
+        check("Agreed in-call action (infoLevel 5) scores 3", r[0] == 3, str(r))
+        check("Qualified area scores 2", r[1] == 2, str(r))
+        check("Developing area scores 1", r[2] == 1, str(r))
+        check("Surface only scores 0", r[3] == 0, str(r))
+        check("Empty call scores 0 without error", r[4] == 0, str(r))
+
+        # ---------- 20. Derived dimensions: n/a handling ----------
+        print("\n=== Derived dimensions null (n/a) handling ===")
+        r = page.evaluate("""() => {
+            const cleanCall = [
+                {piece:'m365', qualification:'developing', roleFit:3, infoLevel:2},
+                {piece:'m365', qualification:'qualified', roleFit:3, infoLevel:3}
+            ];
+            const d = computeDerivedDimensions(cleanCall, [{level:'qualified'}]);
+            const misaimedNoRecovery = [
+                {piece:'secure-network', qualification:'surface', roleFit:1, infoLevel:0},
+                {piece:'secure-network', qualification:'surface', roleFit:1, infoLevel:0}
+            ];
+            const d2 = computeDerivedDimensions(misaimedNoRecovery, [{level:'surface'}]);
+            const recoveredByReferral = [
+                {piece:'secure-network', qualification:'surface', roleFit:1, infoLevel:0},
+                {piece:'secure-network', qualification:'developing', roleFit:2, infoLevel:4, stakeholderID:true}
+            ];
+            const d3 = computeDerivedDimensions(recoveredByReferral, [{level:'developing'}]);
+            return { d, d2, d3 };
+        }""")
+        check("Clean call: stakeholder dimension is null (never needed)", r['d']['stakeholderScore'] is None, str(r['d']))
+        check("Clean call: reframing dimension is null (never needed)", r['d']['reframingScore'] is None, str(r['d']))
+        check("Misaimed with no recovery: stakeholder scores 0", r['d2']['stakeholderScore'] == 0, str(r['d2']))
+        check("Misaimed with no recovery: reframing scores 0", r['d2']['reframingScore'] == 0, str(r['d2']))
+        check("Referral recovery: stakeholder scores 3", r['d3']['stakeholderScore'] == 3, str(r['d3']))
+        check("Referral recovery: reframing stays null (not double-punished)", r['d3']['reframingScore'] is None, str(r['d3']))
+        check("Derived dims include forced-selling count", 'forcedSellingCount' in r['d'], str(r['d']))
+
+        # ---------- 21. Timing-blocked pivot state ----------
+        print("\n=== Timing-blocked pivot state (evidence-led) ===")
+        r = page.evaluate("""() => {
+            const ctx = { existingProducts: [], contactRole: null };
+            return [
+                classifyPivotState('cloud-voice', 'surface', ctx, ["We're mid-contract with our current provider until next spring"]),
+                classifyPivotState('cloud-voice', 'surface', ctx, ["The renewal comes up in the new budget year"]),
+                classifyPivotState('cloud-voice', 'surface', ctx, ["They mostly use mobiles for outbound calls"]),
+                classifyPivotState('cloud-voice', 'none', ctx, []),
+                classifyPivotState('cloud-voice', 'surface', { existingProducts:['cloud-voice'], contactRole:null }, ["We're mid-contract until next spring"])
+            ];
+        }""")
+        check("Contract-lock note classifies as timing-blocked", r[0] == 'timing-blocked', str(r))
+        check("Budget-cycle note classifies as timing-blocked", r[1] == 'timing-blocked', str(r))
+        check("Neutral note does NOT classify as timing-blocked (falls to low-impact)", r[2] == 'low-impact', str(r))
+        check("No notes, no signal -> no-issue unchanged", r[3] == 'no-issue', str(r))
+        check("Already-resolved takes precedence over timing evidence", r[4] == 'already-resolved', str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")

@@ -947,13 +947,13 @@ const Leaderboard = {
     const list = el('#rep-name-list');
     list.innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
   },
-  async submitScore({name, score, level, company, difficulty, questionCount, areasTouched, stageCounts, avgRelevance, missedPains, improvements, strengths}){
-    if(!name) return;
+  async submitScore(payload){
+    if(!payload || !payload.name) return;
     try{
       await fetch(this.API_URL, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name, score, level, company, difficulty, questionCount, areasTouched, stageCounts, avgRelevance, missedPains, improvements, strengths})
+        body: JSON.stringify(payload)
       });
     } catch(e){ /* scorecard is still shown to the rep even if the save fails */ }
   },
@@ -1803,7 +1803,18 @@ function aggregateManagerData(entries){
     const areasTouchedAvg = Math.round(calls.reduce((s,c)=>s+(c.areasTouched||0),0)/n);
     const latestImprovements = calls[n-1].improvements || [];
     const latestMissed = calls[n-1].missedPains || [];
-    return { name:rep.name, calls, n, avgScore, avgRelevance, stageMix, trend, areasTouchedAvg, latestImprovements, latestMissed };
+    // Newer analytics fields — tolerant of legacy entries that predate them:
+    // denominators only count calls that actually carry the field, and a rep
+    // with no such calls shows '—' rather than a misleading 0.
+    const forcedSellingTotal = calls.reduce((s,c)=> s + (Number.isFinite(c.forcedSellingCount) ? c.forcedSellingCount : 0), 0);
+    const nextStepCalls = calls.filter(c=> typeof c.nextStepSecured === 'boolean');
+    const nextStepPct = nextStepCalls.length ? Math.round((nextStepCalls.filter(c=>c.nextStepSecured).length / nextStepCalls.length) * 100) : null;
+    const dimAvgOf = key => {
+      const vals = calls.map(c=>c[key]).filter(Number.isFinite);
+      return vals.length ? Math.round((vals.reduce((s,v)=>s+v,0)/vals.length)*10)/10 : null;
+    };
+    return { name:rep.name, calls, n, avgScore, avgRelevance, stageMix, trend, areasTouchedAvg, latestImprovements, latestMissed,
+      forcedSellingTotal, nextStepPct, avgRoleFit: dimAvgOf('avgRoleFit'), avgListening: dimAvgOf('avgListening'), avgCommercialJudgement: dimAvgOf('avgCommercialJudgement') };
   }).sort((a,b)=> b.avgScore - a.avgScore);
 }
 async function renderManagerReport(){
@@ -1840,6 +1851,52 @@ async function renderManagerReport(){
     return { diff, tier: DIFFICULTY_TIER_INFO[diff], calls: tierEntries.length, avg };
   });
 
+  // Next-step conversion + forced-selling — only over entries that carry the
+  // fields (older entries predate them and are excluded from denominators
+  // rather than silently counted as failures).
+  const nextStepEntries = entries.filter(e=> typeof e.nextStepSecured === 'boolean');
+  const nextStepConversion = nextStepEntries.length ? Math.round((nextStepEntries.filter(e=>e.nextStepSecured).length / nextStepEntries.length) * 100) : null;
+  const forcedEntries = entries.filter(e=> Number.isFinite(e.forcedSellingCount));
+  const forcedIncidents = forcedEntries.reduce((s,e)=>s+e.forcedSellingCount,0);
+  const forcedCallPct = forcedEntries.length ? Math.round((forcedEntries.filter(e=>e.forcedSellingCount>0).length / forcedEntries.length) * 100) : null;
+
+  // Performance by industry and by contact role — only entries that recorded
+  // the field. Sorted by call volume so the most-practised segments lead.
+  const breakdownBy = field => {
+    const groups = {};
+    entries.forEach(e=>{
+      const key = (e[field]||'').trim();
+      if(!key) return;
+      if(!groups[key]) groups[key] = { key, calls:0, scoreSum:0, relSum:0, relN:0 };
+      groups[key].calls += 1; groups[key].scoreSum += (e.score||0);
+      if(Number.isFinite(e.avgRelevance)){ groups[key].relSum += e.avgRelevance; groups[key].relN += 1; }
+    });
+    return Object.values(groups).map(g=>({ key:g.key, calls:g.calls, avg:Math.round(g.scoreSum/g.calls), avgRel: g.relN ? Math.round((g.relSum/g.relN)*10)/10 : null }))
+      .sort((a,b)=> b.calls - a.calls);
+  };
+  const byIndustry = breakdownBy('industry');
+  const byRole = breakdownBy('role');
+  const segmentTableHTML = (title, rows, keyLabel) => rows.length ? `
+    <h4 style="font-size:13px;color:var(--navy);margin:0 0 10px;font-family:var(--font-head);">${title}</h4>
+    <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;">
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:420px;">
+        <tr style="background:var(--navy);color:#fff;text-align:left;">
+          <th style="padding:8px 14px;font-size:12px;">${keyLabel}</th>
+          <th style="padding:8px 14px;font-size:12px;">Calls</th>
+          <th style="padding:8px 14px;font-size:12px;">Avg score</th>
+          <th style="padding:8px 14px;font-size:12px;">Avg relevance</th>
+        </tr>
+        ${rows.map(r=>`<tr style="border-top:1px solid var(--line);">
+          <td style="padding:8px 14px;font-size:13px;">${esc(r.key)}</td>
+          <td style="padding:8px 14px;font-size:13px;">${r.calls}</td>
+          <td style="padding:8px 14px;font-size:13px;">${r.avg}/100</td>
+          <td style="padding:8px 14px;font-size:13px;">${r.avgRel !== null ? r.avgRel+'/3' : '—'}</td>
+        </tr>`).join('')}
+      </table>
+      </div>
+    </div>` : '';
+
   wrap.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px;">
       <div class="mgr-stat"><div class="mgr-stat-num">${entries.length}</div><div class="mgr-stat-label">Calls logged</div></div>
@@ -1847,6 +1904,8 @@ async function renderManagerReport(){
       <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgScore}/100</div><div class="mgr-stat-label">Team avg score</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgRelevance ?? '—'}/3</div><div class="mgr-stat-label">Avg question relevance</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${goodStagePct}%</div><div class="mgr-stat-label">Questions were Implication / Need-payoff</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${nextStepConversion !== null ? nextStepConversion+'%' : '—'}</div><div class="mgr-stat-label">Calls ending with a clear next step</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${forcedIncidents || (forcedEntries.length ? 0 : '—')}</div><div class="mgr-stat-label">Forced-selling incidents (pitching before any need was established${forcedCallPct !== null ? ' — on '+forcedCallPct+'% of calls' : ''})</div></div>
     </div>
     <h4 style="font-size:13px;color:var(--navy);margin:0 0 10px;font-family:var(--font-head);">Performance by difficulty tier</h4>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:22px;">
@@ -1858,6 +1917,9 @@ async function renderManagerReport(){
           <div class="mgr-stat-label">${d.calls} call${d.calls===1?'':'s'}</div>
         </div>`).join('')}
     </div>
+    ${segmentTableHTML('Performance by industry', byIndustry, 'Industry')}
+    ${segmentTableHTML('Performance by contact role', byRole, 'Contact role')}
+    ${(byIndustry.length || byRole.length) ? '' : '<p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 18px;">Industry and role breakdowns will appear here as new calls are logged — calls made before this report was upgraded didn\u2019t record those fields.</p>'}
     <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;">
       <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;min-width:680px;">
@@ -1895,6 +1957,13 @@ async function renderManagerReport(){
                   ${r.latestImprovements.map(x=>`<li>${esc(x)}</li>`).join('') || '<li>No specific gaps flagged in the most recent call.</li>'}
                 </ul>
               </div>
+            </div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:18px;font-size:12.5px;color:var(--ink-soft);">
+              <span><strong style="color:var(--navy);">Next step secured:</strong> ${r.nextStepPct !== null ? r.nextStepPct+'% of calls' : '—'}</span>
+              <span><strong style="color:${r.forcedSellingTotal>0 ? 'var(--danger)' : 'var(--navy)'};">Forced-selling incidents:</strong> ${r.forcedSellingTotal}</span>
+              <span><strong style="color:var(--navy);">Role fit:</strong> ${r.avgRoleFit !== null ? r.avgRoleFit+'/3' : '—'}</span>
+              <span><strong style="color:var(--navy);">Listening:</strong> ${r.avgListening !== null ? r.avgListening+'/3' : '—'}</span>
+              <span><strong style="color:var(--navy);">Commercial judgement:</strong> ${r.avgCommercialJudgement !== null ? r.avgCommercialJudgement+'/3' : '—'}</span>
             </div>
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
               <button class="btn btn-outline mgr-delete-btn" data-name="${esc(r.name)}" style="color:var(--danger);border-color:var(--danger);font-size:12.5px;padding:6px 12px;">Remove ${esc(r.name)} from leaderboard</button>
@@ -2287,16 +2356,31 @@ const PIVOT_STATES = {
     description: "There's a real answer here, it just hasn't been explored deeply enough yet to know if it's worth pursuing.",
     action: 'Ask one more implication question before giving up on this area — "what would it cost you if..." often reveals more than the first pass did.'
   },
+  'timing-blocked': {
+    label: 'Blocked by contract or timing, not by need',
+    description: "The answers gathered suggest a real interest that's locked behind an existing contract, renewal date or budget cycle — not a genuine dead end.",
+    action: 'Log the timing (contract end, renewal window, budget cycle) and agree a specific follow-up for then — a diary note beats a pitch they can\u2019t act on today.'
+  },
   'no-issue': {
     label: 'Genuinely no issue here',
     description: "Best evidence available says this area is a real dead end for this business right now.",
     action: 'Pivot to a different, genuinely relevant focus area using a broad, open question — a real call rarely ends after one dead end.'
   }
 };
-function classifyPivotState(pieceId, level, context){
+function notesSuggestTimingBlock(notes){
+  // Evidence-led: only classify as timing-blocked when the ANSWERS the rep
+  // actually gathered mention a contract/renewal/budget-cycle constraint —
+  // never inferred from context selections alone, which would be the model
+  // guessing rather than the conversation showing it.
+  const joined = ' ' + (notes||[]).join(' ').toLowerCase() + ' ';
+  return /(mid.contract|under contract|in contract|contract (ends|runs|until)|tied in|locked in|locked into|renewal|renews|notice period|budget (cycle|year)|next (financial|budget) year|revisit (this|it|next))/.test(joined);
+}
+function classifyPivotState(pieceId, level, context, notes){
   context = context || App.context;
+  notes = notes || (App.qual && App.qual.notes) || [];
   if(context.existingProducts && context.existingProducts.includes(pieceId)) return 'already-resolved';
   if(context.contactRole && !roleOwnsPiece(context.contactRole, pieceId)) return 'wrong-stakeholder';
+  if(notesSuggestTimingBlock(notes)) return 'timing-blocked';
   if(level === 'surface') return 'low-impact';
   return 'no-issue';
 }
@@ -2583,6 +2667,171 @@ const DIFFICULTY_TIER_INFO = {
   brisk: { name: 'Realistic', description: 'Mixed priorities, some questions lead to dead ends, stakeholder boundaries apply — you need to listen and adapt.' },
   dismissive: { name: 'Challenging', description: 'The contact may be guarded or sceptical, existing suppliers may seem satisfactory — progress depends on precise follow-up and commercial judgement.' }
 };
+/* Difficulty score multiplier — SINGLE source of truth, used by BOTH the
+   offline scoring engine (numerically) and the AI final-scoring prompt (the
+   instruction sentence is generated from this same object), so the two
+   engines can never silently drift apart. Calibrated empirically — see the
+   commit history for how 1.6 was found to overcorrect and reduced to 1.4. */
+const DIFFICULTY_SCORE_MULTIPLIER = { warm: 1.0, brisk: 1.2, dismissive: 1.4 };
+function difficultyMultiplierClause(){
+  return `${DIFFICULTY_SCORE_MULTIPLIER.warm} if difficulty is "warm", ${DIFFICULTY_SCORE_MULTIPLIER.brisk} if difficulty is "brisk", ${DIFFICULTY_SCORE_MULTIPLIER.dismissive} if difficulty is "dismissive"`;
+}
+
+/* Per-turn scoring dimensions — SINGLE source of truth for the schema used
+   by both the AI prompt's required JSON shape and the offline engine's
+   scoring objects. The parity test in tests/test_suite.py asserts both
+   engines conform to exactly this key set, so adding a dimension here
+   without wiring it into both engines fails the suite rather than silently
+   diverging. */
+const TURN_SCORING_KEYS = ['piece','questionType','relevance','qualification','infoLevel','roleFit','listening','commercialJudgement','stakeholderID','reframing','note'];
+function turnScoringSchemaLine(){
+  return '{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "stakeholderID": false, "reframing": false, "note": "..."}}';
+}
+
+/* Deterministic detectors for the event-like dimensions (stakeholder
+   identification, reframing). These run client-side for BOTH engines —
+   in AI mode they're OR-merged with the model's own judgement, so an
+   obvious "who should I speak to about that?" is always credited even if
+   the model misses it, and offline mode gets the same baseline behaviour.
+   Keyword tables here follow the same caution as the duplicate detector:
+   tested against realistic rep phrasings, not just the phrases they were
+   written against (see tests). */
+function detectStakeholderAsk(text){
+  const t = ' ' + String(text||'').toLowerCase() + ' ';
+  return /who (else|owns|looks after|handles|manages|deals with|would (i|be)|is (the|responsible)|should i)/.test(t)
+    || /(right|best) (person|people|contact)/.test(t)
+    || /introduc/.test(t)
+    || /connect me/.test(t)
+    || /put me in touch/.test(t)
+    || /(refer|referral)/.test(t)
+    || /speak (to|with) (your|the|someone|whoever)/.test(t);
+}
+function detectReframingSignal(text, priorTurnScores){
+  // A reframe only means something as a RESPONSE to a misaimed question:
+  // the previous rep turn was outside this contact's lane (low roleFit or a
+  // referral-style deflection), and THIS message re-asks in business terms.
+  const prior = (priorTurnScores||[]).filter(t=>!t.repetition);
+  const last = prior[prior.length-1];
+  const misaimedBefore = !!(last && Number.isFinite(last.roleFit) && last.roleFit <= 1);
+  if(!misaimedBefore) return false;
+  const t = ' ' + String(text||'').toLowerCase() + ' ';
+  return /(cost|costing|spend|budget)/.test(t)
+    || /day.to.day/.test(t)
+    || /(downtime|disruption|delays?)/.test(t)
+    || /from a business/.test(t)
+    || /(bottom line|revenue|time it takes|hours)/.test(t)
+    || /(affect|impact)s? (you|your|the team|the business)/.test(t);
+}
+function mergeDeterministicSignals(scoring, repText, priorTurnScores){
+  // OR-merge: the deterministic layer can only ADD credit, never remove the
+  // model's judgement — identical principle to the duplicate detector
+  // (deterministic pre-checks beat prompt-only enforcement for the cases
+  // they can catch; the model still covers the subtle ones).
+  scoring.stakeholderID = !!scoring.stakeholderID || detectStakeholderAsk(repText);
+  scoring.reframing = !!scoring.reframing || detectReframingSignal(repText, priorTurnScores);
+  return scoring;
+}
+
+/* Forced-selling detection — deterministic, computed identically for both
+   engines from the turn record: a "closed"/pitch-stage message counts as
+   forced when it lands before ANY prior turn has established at least a
+   developing-level need. Pitching after genuine qualification is fine;
+   pitching before any need exists is the forced-selling anti-pattern the
+   Manager Report needs to surface. */
+function computeForcedSellingCount(turnScores){
+  let established = false, forced = 0;
+  (turnScores||[]).forEach(t=>{
+    if(t.questionType === 'closed' && !established) forced += 1;
+    if(LEVEL_SCORE[t.qualification] >= 2) established = true;
+  });
+  return forced;
+}
+
+/* Pivot quality — a graded 0-3 dimension (or null when no pivot situation
+   arose, so a call with no dead ends isn't scored on a skill it never
+   needed). Evidence-led classification, deterministic and identical in
+   both modes since it reads the same turn record either way:
+     3 — dead end on one area, then a genuinely different area developed to
+         developing/qualified (the evidence-led pivot this app trains)
+     2 — pivoted away from a dead end but the new area only reached surface
+     1 — switched areas with no dead-end evidence (abandoned a live line)
+     0 — 3+ consecutive turns stuck at "none" on the same area with no
+         switch (kept forcing a dead line instead of pivoting)
+     null — no dead ends and no switches: pivoting never came up */
+function computePivotQuality(turnScores){
+  const turns = (turnScores||[]).filter(t=>t.piece && !t.repetition);
+  if(!turns.length) return null;
+  // 0: forced continuation on a dead line
+  let run = 0, runPiece = null;
+  for(const t of turns){
+    if(t.piece === runPiece && LEVEL_SCORE[t.qualification] === 0){ run += 1; }
+    else { runPiece = t.piece; run = LEVEL_SCORE[t.qualification] === 0 ? 1 : 0; }
+    if(run >= 3) return 0;
+  }
+  // 3 / 2: dead end then a different area
+  for(let i=0;i<turns.length;i++){
+    if(LEVEL_SCORE[turns[i].qualification] > 0) continue;
+    for(let j=i+1;j<turns.length;j++){
+      if(turns[j].piece === turns[i].piece) continue;
+      if(LEVEL_SCORE[turns[j].qualification] >= 2) return 3;
+      if(LEVEL_SCORE[turns[j].qualification] >= 1) return 2;
+    }
+  }
+  // 1: switched away from an area that was still live (no dead-end evidence)
+  const pieceOrder = [];
+  turns.forEach(t=>{ if(!pieceOrder.length || pieceOrder[pieceOrder.length-1] !== t.piece) pieceOrder.push(t.piece); });
+  if(pieceOrder.length >= 2){
+    const firstPiece = pieceOrder[0];
+    const firstPieceBest = Math.max(...turns.filter(t=>t.piece===firstPiece).map(t=>LEVEL_SCORE[t.qualification]));
+    if(firstPieceBest >= 1) return 1;
+  }
+  return null;
+}
+
+/* Next-step dimension — 0-3, deterministic from what the call actually
+   achieved (identical in both modes):
+     3 — a concrete agreed action/next step was reached in-call (infoLevel 5)
+     2 — at least one area fully qualified: a clear, specific follow-up exists
+     1 — something developing: a follow-up is possible but not yet earned
+     0 — nothing beyond surface: no real next step to point at */
+function computeNextStepScore(turnScores, perArea){
+  const maxInfo = Math.max(0, ...((turnScores||[]).map(t=>t.infoLevel).filter(Number.isFinite)));
+  if(maxInfo >= 5) return 3;
+  const levels = (perArea||[]).map(a=>LEVEL_SCORE[a.level]||0);
+  if(levels.some(l=>l>=3)) return 2;
+  if(levels.some(l=>l>=2)) return 1;
+  return 0;
+}
+
+/* Derived dimensions for the final scorecard — computed client-side from
+   the per-turn record AFTER either engine has produced its scorecard, so
+   AI mode and offline mode are guaranteed to agree on these by
+   construction (this is the AI-vs-offline parity principle applied
+   structurally rather than hoped-for). Null means "not applicable this
+   call" and the dimension is simply not shown, rather than punishing a rep
+   for a situation that never arose. */
+function computeDerivedDimensions(turnScores, perArea){
+  const turns = (turnScores||[]).filter(t=>!t.repetition);
+  const misaimed = turns.filter(t=>Number.isFinite(t.roleFit) && t.roleFit <= 1).length;
+  const stakeholderAsks = turns.filter(t=>t.stakeholderID).length;
+  const reframes = turns.filter(t=>t.reframing).length;
+  let stakeholderScore = null;
+  if(stakeholderAsks > 0) stakeholderScore = misaimed > 0 ? 3 : 2; // recognised + acted, or proactively multi-threading
+  else if(misaimed > 0 && reframes === 0) stakeholderScore = 0;    // misaimed questions with no recovery of either kind
+  let reframingScore = null;
+  if(reframes > 0) reframingScore = 3;
+  else if(misaimed > 0 && stakeholderAsks === 0) reframingScore = 0; // don't double-punish: a referral instead of a reframe is a valid recovery
+  const pivotQuality = computePivotQuality(turnScores);
+  const nextStepScore = computeNextStepScore(turnScores, perArea);
+  return {
+    stakeholderScore, reframingScore, pivotQuality, nextStepScore,
+    stakeholderAsks, reframes,
+    nextStepSecured: nextStepScore >= 2,
+    forcedSellingCount: computeForcedSellingCount(turnScores),
+    deepestInfoLevel: Math.max(0, ...(turns.map(t=>t.infoLevel).filter(Number.isFinite)))
+  };
+}
+
 function pickDifficulty(explicitChoice){
   if(explicitChoice && DIFFICULTY_TIER_INFO[explicitChoice]) return explicitChoice;
   const r = Math.random();
@@ -3109,7 +3358,7 @@ async function sendRepMessage(){
     const note = `That's very close to something you already asked — "${dup.matchedQuestion}" (${dup.reason}). The customer's already told you about that; repeating it won't uncover anything new.` +
       (suggestion ? ` Try asking about ${suggestion} instead.` : ' Try a different angle, or move to the next stage.');
     addBubble('system', note);
-    Coach.turnScores.push({ piece, questionType: stage, relevance: 0, qualification: 'none', infoLevel: 0, roleFit: 2, listening: 0, commercialJudgement: 1, note, repetition: true });
+    Coach.turnScores.push({ piece, questionType: stage, relevance: 0, qualification: 'none', infoLevel: 0, roleFit: 2, listening: 0, commercialJudgement: 1, stakeholderID: false, reframing: false, note, repetition: true });
     updateGauge();
     return; // preserve state, no engine call, no new/contradictory customer answer generated
   }
@@ -3128,7 +3377,7 @@ async function sendRepMessage(){
     hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
-    if(result.scoring){ Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece); }
+    if(result.scoring){ mergeDeterministicSignals(result.scoring, text, Coach.turnScores); Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece); }
   } catch(err){
     if(myGeneration !== App.scenarioGeneration){ hideTyping(); return; } // stale — discard rather than apply an offline fallback to the wrong scenario
     hideTyping();
@@ -3140,7 +3389,7 @@ async function sendRepMessage(){
     hideTyping();
     addBubble('customer', result.reply, Coach.profile.persona.name);
     Coach.messages.push({who:'customer', text:result.reply});
-    Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece);
+    mergeDeterministicSignals(result.scoring, text, Coach.turnScores); Coach.turnScores.push(result.scoring); updateGauge(); updateConversationStateFromScoring(result.scoring, piece);
   }
   if(myGeneration === App.scenarioGeneration){ Coach.busy = false; el('#btn-send').disabled = false; chatInput.focus(); }
 }
@@ -3331,10 +3580,12 @@ Score it as:
 - roleFit: integer 0-3, how well-suited this question was to what THIS specific contact (given their role) could actually be expected to know or own — 3 = perfectly pitched at their level, 0 = asked as if they were a different role entirely (e.g. deep technical detail put to a non-technical Office Manager)
 - listening: integer 0-3, how well this message actually builds on what you (the persona) just said in your previous reply, versus ignoring it and asking something generic or already-covered — 3 = clearly references or builds on the specific thing you just said, 0 = could have been asked with no memory of the conversation at all
 - commercialJudgement: integer 0-3, overall business judgement shown in this specific message — reading buying signals correctly, not forcing a pitch prematurely, recognising when to stop pushing a dead line of questioning — 3 = excellent judgement for the moment, 0 = poor judgement (e.g. pitching before any need is established, or ignoring a clear signal to stop)
+- stakeholderID: boolean — true ONLY if this specific message genuinely tries to identify or reach the right stakeholder for a topic (asking who owns/handles an area, asking for an introduction or referral, asking who else is involved in a decision). Ordinary discovery questions are false.
+- reframing: boolean — true ONLY if this specific message re-asks or re-angles something previously misaimed (too technical, or outside this contact's role) in business terms this contact CAN speak to (cost, time, disruption, day-to-day impact). A first-time business-terms question with nothing misaimed before it is false.
 - note: one or two short, encouraging coaching-style sentences that explain the REASONING, not just praise or criticise — what they did well or could improve, whether this contact was even the right person to ask about this topic, and if there's a clearly better next move (probe deeper, pivot to a different area, or ask for the right stakeholder), name it briefly
 
 Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
-{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "note": "..."}}
+${turnScoringSchemaLine()}
 REMINDER, since this conversation may have grown long: respond with ONLY that JSON object. No prose before or after it, no markdown fences. This matters more, not less, the longer the conversation gets.`;
 
   // Cap the raw message history sent to the model — the structured state
@@ -3375,13 +3626,13 @@ async function finalScoringViaAPI(){
   const roleProfile = ROLE_KNOWLEDGE_PROFILE[p.persona.role] || null;
   const system = `You are a sales coaching engine reviewing a structured discovery conversation between a JUNIOR sales rep and a simulated SME customer. The audience for this feedback is a junior rep still building confidence — be encouraging and constructive in tone throughout, not harsh or nitpicky. Prioritise recognising active questioning and genuine curiosity over penalising imperfect technique; a rep who asked plenty of relevant questions and kept the conversation moving should score reasonably well even if not every question was a perfectly-formed Implication or Need-payoff question.
 This customer persona was deliberately set to "${difficulty}" difficulty — ${DIFFICULTY_TIER_INFO[difficulty] ? DIFFICULTY_TIER_INFO[difficulty].name : difficulty} tier (Guided/warm = easy and forthcoming, Realistic/brisk = businesslike and has to be asked well, Challenging/dismissive = genuinely tough to get going).
-DIFFICULTY-WEIGHTED SCORING — apply this exact adjustment, not just a vague "credit": first work out what the overallScore would be based purely on the qualification levels reached (perArea) as if this were a Guided/warm call. Then multiply that raw score by: 1.0 if difficulty is "warm", 1.2 if difficulty is "brisk", 1.4 if difficulty is "dismissive" — and cap the result at 100. This is the SAME multiplier the offline scoring engine uses, so the two stay consistent with each other. Report the final, ALREADY-WEIGHTED number as overallScore. If the difficulty was brisk or dismissive and the weighting made a meaningful difference, say so explicitly in the summary (e.g. "this was a Challenging call, so your score reflects that extra difficulty").
+DIFFICULTY-WEIGHTED SCORING — apply this exact adjustment, not just a vague "credit": first work out what the overallScore would be based purely on the qualification levels reached (perArea) as if this were a Guided/warm call. Then multiply that raw score by: ${difficultyMultiplierClause()} — and cap the result at 100. This is the SAME multiplier the offline scoring engine uses, so the two stay consistent with each other. Report the final, ALREADY-WEIGHTED number as overallScore. If the difficulty was brisk or dismissive and the weighting made a meaningful difference, say so explicitly in the summary (e.g. "this was a Challenging call, so your score reflects that extra difficulty").
 DO NOT CONFLATE QUESTION QUALITY WITH PERSONA STINGINESS: on brisk/dismissive difficulty, a genuinely pertinent, well-targeted question should score well on relevance and roleFit even if the guarded persona only partially reveals in response — that guardedness is deliberate, designed persona behaviour, not evidence the rep asked poorly. Judge "relevance" and "roleFit" on the MERIT OF THE QUESTION ITSELF; only "qualification"/"infoLevel" should reflect how much the persona actually chose to reveal. When reviewing the turn-by-turn scores for the strengths/improvements below, if you see a pattern of high relevance paired with lower qualification specifically on a brisk/dismissive call, call this out explicitly as good technique against a tough persona, not a shortfall.
 Customer profile: ${p.companyName || 'the company'}, ${p.industry}, ${p.employees} employees, persona ${p.persona.name} (${p.persona.role}).${roleProfile ? ` This role realistically owns/can discuss: ${roleProfile.strongAreas.join(', ')} — anything else, a good rep should have recognised the contact might not be the right person and asked for a referral or reframed in business terms, not pushed for technical detail this contact wouldn't have.` : ''}
 The customer's REAL hidden pains, not known to the rep in advance, were:
 ${p.hiddenPains.map(hp=>'- ('+hp.piece+', severity '+hp.severity+'): '+hp.detail).join('\n')}
 The rep asked ${questionCount} questions during this call.
-Turn-by-turn scoring already computed during the call:
+Turn-by-turn scoring already computed during the call (note: "stakeholderID": true marks a turn that asked for the right stakeholder or a referral, and "reframing": true marks a turn that recovered a misaimed question by re-asking it in business terms — credit both explicitly in strengths where they appear):
 ${JSON.stringify(Coach.turnScores)}
 Full transcript:
 ${transcript}
@@ -3454,14 +3705,14 @@ function localRoleplayTurn(repText){
   if(pieceId && priorPain){
     return {
       reply: `As I mentioned, that's a real issue for us — ${hiddenPain ? hiddenPain.detail : 'the same one I flagged before'}. Anything specific you want to know about it?`,
-      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 2, qualification: 'developing', infoLevel: 3, roleFit: 2, listening: 3, commercialJudgement: 2,
+      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 2, qualification: 'developing', infoLevel: 3, roleFit: 2, listening: 3, commercialJudgement: 2, stakeholderID: false, reframing: false,
         note: 'Good to circle back, but this was already confirmed — worth pushing into a new dimension (impact, timing, stakeholders) rather than re-confirming the same fact.' }
     };
   }
   if(pieceId && priorRuledOut){
     return {
       reply: `Like I said, that one's genuinely fine for us — not something we're dealing with.`,
-      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 1, qualification: 'surface', infoLevel: 0, roleFit: 2, listening: 1, commercialJudgement: 1,
+      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 1, qualification: 'surface', infoLevel: 0, roleFit: 2, listening: 1, commercialJudgement: 1, stakeholderID: false, reframing: false,
         note: "This area was already ruled out — re-asking it won't change the answer. Consider pivoting to a different focus area instead." }
     };
   }
@@ -3504,7 +3755,7 @@ function localRoleplayTurn(repText){
   else if(hiddenPain){ reply = pickUnusedReply(HINTS, 'hint', state); qualification='developing'; relevance=2; infoLevel=1; roleFit=2; }
   else if(pieceId){ reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='surface'; relevance=1; infoLevel=0; roleFit=2; }
   else { reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='none'; relevance=0; infoLevel=0; roleFit=1; }
-  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, infoLevel, roleFit, listening, commercialJudgement, note } };
+  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, infoLevel, roleFit, listening, commercialJudgement, stakeholderID: false, reframing: false, note } };
 }
 function detectPivot(turnScores){
   // Looks for a "none"/low-relevance turn on one piece followed later by a
@@ -3538,7 +3789,6 @@ function localFinalScoring(){
   // against a Challenging persona scores identically to the same effort
   // against a Guided one, which isn't a fair comparison. Multipliers are
   // applied to the raw percentage and capped at 100.
-  const DIFFICULTY_SCORE_MULTIPLIER = { warm: 1.0, brisk: 1.2, dismissive: 1.4 };
   const difficultyKey = p.difficulty || 'warm';
   const pct = Math.min(100, Math.round(rawPct * (DIFFICULTY_SCORE_MULTIPLIER[difficultyKey] || 1.0)));
   const questionCount = Coach.messages.filter(m=>m.who==='rep').length;
@@ -3592,6 +3842,12 @@ async function endScenario(){
   let data;
   try{ data = Coach.mode==='ai' ? await finalScoringViaAPI() : localFinalScoring(); }
   catch(err){ console.error('finalScoringViaAPI failed, falling back to offline scoring:', err); data = localFinalScoring(); }
+  // Derived dimensions (stakeholder ID, reframing, pivot quality, next step,
+  // forced-selling detection) are computed HERE, client-side, from the same
+  // per-turn record regardless of which engine produced the scorecard — so
+  // AI mode and offline mode agree on these by construction rather than by
+  // hoping two separately-written implementations stay in sync.
+  data.derived = computeDerivedDimensions(Coach.turnScores, data.perArea);
   renderScorecard(data); openModal();
 
   // Aggregate per-turn SPIN-stage stats (situation/problem/implication/needpayoff/
@@ -3606,16 +3862,37 @@ async function endScenario(){
   });
   const areasTouched = new Set(Coach.turnScores.filter(t=>t.piece).map(t=>t.piece)).size;
 
+  // Per-dimension averages for the Manager Report's coaching analytics —
+  // same aggregation approach as avgRelevance, one value per tracked
+  // numeric dimension.
+  const dimAvg = key => {
+    const vals = Coach.turnScores.map(t=>t[key]).filter(Number.isFinite);
+    return vals.length ? Math.round((vals.reduce((s,v)=>s+v,0)/vals.length)*10)/10 : null;
+  };
+  const d = data.derived || {};
   Leaderboard.submitScore({
     name: App.repName,
     score: data.overallScore,
     level: data.overallLevel,
     company: Coach.profile.companyName || '',
     difficulty: Coach.profile.difficulty || '',
+    industry: Coach.profile.industry || '',
+    role: (Coach.profile.persona && Coach.profile.persona.role) || '',
+    employees: Number.isFinite(Number(Coach.profile.employees)) ? Number(Coach.profile.employees) : null,
     questionCount: Coach.messages.filter(m=>m.who==='rep').length,
     areasTouched,
     stageCounts,
     avgRelevance: relevanceCount ? Math.round((relevanceTotal/relevanceCount)*10)/10 : null,
+    avgRoleFit: dimAvg('roleFit'),
+    avgListening: dimAvg('listening'),
+    avgCommercialJudgement: dimAvg('commercialJudgement'),
+    deepestInfoLevel: Number.isFinite(d.deepestInfoLevel) ? d.deepestInfoLevel : null,
+    stakeholderAsks: d.stakeholderAsks || 0,
+    reframes: d.reframes || 0,
+    pivotQuality: Number.isFinite(d.pivotQuality) ? d.pivotQuality : null,
+    nextStepScore: Number.isFinite(d.nextStepScore) ? d.nextStepScore : null,
+    nextStepSecured: !!d.nextStepSecured,
+    forcedSellingCount: d.forcedSellingCount || 0,
     missedPains: data.missedPains || [],
     improvements: data.improvements || [],
     strengths: data.strengths || []
@@ -3716,6 +3993,18 @@ function renderScorecard(data){
     const vals = Coach.turnScores.map(t=>t[d.key]).filter(Number.isFinite);
     return { ...d, avg: vals.length ? Math.round((vals.reduce((s,v)=>s+v,0)/vals.length)*10)/10 : null };
   }).filter(d=>d.avg !== null);
+  // Derived, situation-dependent dimensions: null means the situation never
+  // arose this call (no misaimed questions, no dead ends to pivot from), so
+  // the row simply isn't shown rather than scoring a skill that wasn't needed.
+  const dv = data.derived || {};
+  [
+    { key:'stakeholderScore', label:'Stakeholder identification', max:3 },
+    { key:'reframingScore', label:'Reframing', max:3 },
+    { key:'pivotQuality', label:'Pivot quality', max:3 },
+    { key:'nextStepScore', label:'Next step', max:3 }
+  ].forEach(d=>{
+    if(Number.isFinite(dv[d.key])) dimAverages.push({ ...d, avg: dv[d.key] });
+  });
   if(dimAverages.length){
     el('#modal-dimensions').innerHTML = dimAverages.map(d=>`
       <div class="dim-row">

@@ -94,6 +94,22 @@ exports.handler = async (event) => {
       areasTouched: Number.isFinite(Number(payload.areasTouched)) ? Number(payload.areasTouched) : null,
       stageCounts: (payload.stageCounts && typeof payload.stageCounts === 'object') ? payload.stageCounts : null,
       avgRelevance: Number.isFinite(Number(payload.avgRelevance)) ? Number(payload.avgRelevance) : null,
+      // Manager-analytics fields (all excluded from PUBLIC_FIELDS above, so
+      // they're only visible with a valid manager session token — same
+      // gating as the existing coaching detail):
+      industry: String(payload.industry || '').slice(0, 80),
+      role: String(payload.role || '').slice(0, 80),
+      employees: Number.isFinite(Number(payload.employees)) ? Number(payload.employees) : null,
+      avgRoleFit: Number.isFinite(Number(payload.avgRoleFit)) ? Number(payload.avgRoleFit) : null,
+      avgListening: Number.isFinite(Number(payload.avgListening)) ? Number(payload.avgListening) : null,
+      avgCommercialJudgement: Number.isFinite(Number(payload.avgCommercialJudgement)) ? Number(payload.avgCommercialJudgement) : null,
+      deepestInfoLevel: Number.isFinite(Number(payload.deepestInfoLevel)) ? Number(payload.deepestInfoLevel) : null,
+      stakeholderAsks: Number.isFinite(Number(payload.stakeholderAsks)) ? Number(payload.stakeholderAsks) : 0,
+      reframes: Number.isFinite(Number(payload.reframes)) ? Number(payload.reframes) : 0,
+      pivotQuality: Number.isFinite(Number(payload.pivotQuality)) ? Number(payload.pivotQuality) : null,
+      nextStepScore: Number.isFinite(Number(payload.nextStepScore)) ? Number(payload.nextStepScore) : null,
+      nextStepSecured: typeof payload.nextStepSecured === 'boolean' ? payload.nextStepSecured : null,
+      forcedSellingCount: Number.isFinite(Number(payload.forcedSellingCount)) ? Number(payload.forcedSellingCount) : null,
       missedPains: Array.isArray(payload.missedPains) ? payload.missedPains.slice(0, 10).map(s => String(s).slice(0, 200)) : [],
       improvements: Array.isArray(payload.improvements) ? payload.improvements.slice(0, 10).map(s => String(s).slice(0, 300)) : [],
       strengths: Array.isArray(payload.strengths) ? payload.strengths.slice(0, 10).map(s => String(s).slice(0, 300)) : [],
