@@ -1695,6 +1695,9 @@ async function renderLeaderboard(){
     return;
   }
   const ranked = aggregateLeaderboard(entries);
+  const journeyNames = [...new Set(entries.map(e=>e.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const storedName = safeStorageGet('ssa_rep_name') || '';
+  const defaultJourneyName = journeyNames.includes(storedName) ? storedName : (journeyNames[0] || '');
   const medal = i => i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
   wrap.innerHTML = `
     <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;">
@@ -1719,7 +1722,49 @@ async function renderLeaderboard(){
         </tr>`).join('')}
       </table>
       </div>
+    </div>
+    <div style="background:var(--cream-card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-top:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+        <h3 style="margin:0;font-size:16px;color:var(--navy);font-family:var(--font-head);">\ud83d\uddfa\ufe0f Your discovery journey</h3>
+        <select id="journey-name-select" style="padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;background:#fff;">
+          ${journeyNames.map(n=>`<option value="${esc(n)}" ${n===defaultJourneyName?'selected':''}>${esc(n)}</option>`).join('')}
+        </select>
+      </div>
+      <p style="margin:0 0 14px;font-size:12.5px;color:var(--ink-faint);line-height:1.5;">Every focus area you surface real evidence in during a Virtual Sales Call gets a \u2713 here \u2014 across each difficulty tier. Empty spots aren't gaps, they're just adventures you haven't had yet. Based on your Virtual Sales Calls.</p>
+      <div id="journey-grid"></div>
     </div>`;
+  const renderJourney = (name)=>{
+    const grid = el('#journey-grid'); if(!grid) return;
+    const mine = entries.filter(e=>e.name===name);
+    const tiers = ['warm','brisk','dismissive'];
+    const covered = {};
+    mine.forEach(e=>{
+      (e.piecesDiscovered||[]).forEach(pid=>{
+        covered[pid] = covered[pid] || {};
+        if(e.difficulty) covered[pid][e.difficulty] = true;
+      });
+    });
+    const areasExplored = PIECES.filter(p=>covered[p.id]).length;
+    const cheer = areasExplored === 0 ? "Your map is waiting \u2014 every call colours in a little more of it."
+      : areasExplored < 4 ? `You've explored ${areasExplored} of ${PIECES.length} focus areas \u2014 great start, keep going!`
+      : areasExplored < 8 ? `You've explored ${areasExplored} of ${PIECES.length} focus areas \u2014 seriously good coverage building up.`
+      : `You've explored ${areasExplored} of ${PIECES.length} focus areas \u2014 you're becoming a full-portfolio seller. \ud83c\udf1f`;
+    grid.innerHTML = `
+      <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--teal);">${esc(cheer)}</p>
+      <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:420px;">
+        <tr>
+          <th style="text-align:left;padding:6px 8px;font-size:11.5px;color:var(--ink-faint);font-weight:700;">Focus area</th>
+          ${tiers.map(t=>`<th style="text-align:center;padding:6px 8px;font-size:11.5px;color:var(--ink-faint);font-weight:700;">${DIFFICULTY_TIER_INFO[t].name}</th>`).join('')}
+        </tr>
+        ${PIECES.map(p=>`<tr style="border-top:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:12.5px;color:var(--navy);font-weight:600;white-space:nowrap;">${p.icon} ${esc(p.short)}</td>
+          ${tiers.map(t=>`<td style="text-align:center;padding:7px 8px;font-size:14px;">${(covered[p.id]&&covered[p.id][t]) ? '<span style="color:var(--teal);font-weight:800;">\u2713</span>' : '<span style="color:#D8D2E8;">\u00b7</span>'}</td>`).join('')}
+        </tr>`).join('')}
+      </table></div>`;
+  };
+  renderJourney(defaultJourneyName);
+  const jsel = el('#journey-name-select');
+  if(jsel) jsel.addEventListener('change', e=> renderJourney(e.target.value));
 }
 
 /* =========================================================================
@@ -1964,6 +2009,12 @@ async function renderManagerReport(){
               <span><strong style="color:var(--navy);">Role fit:</strong> ${r.avgRoleFit !== null ? r.avgRoleFit+'/3' : '—'}</span>
               <span><strong style="color:var(--navy);">Listening:</strong> ${r.avgListening !== null ? r.avgListening+'/3' : '—'}</span>
               <span><strong style="color:var(--navy);">Commercial judgement:</strong> ${r.avgCommercialJudgement !== null ? r.avgCommercialJudgement+'/3' : '—'}</span>
+            </div>
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-soft);">
+              <strong style="color:var(--navy);">Focus-area coverage:</strong>
+              ${(()=>{ const cov = new Set(); r.calls.forEach(c=>(c.piecesDiscovered||[]).forEach(pid=>cov.add(pid)));
+                const chips = PIECES.filter(p=>cov.has(p.id)).map(p=>`<span title="${esc(p.short)}" style="margin-right:4px;">${p.icon}</span>`).join('');
+                return cov.size ? `${cov.size}/${PIECES.length} areas &nbsp;${chips}` : '<span style="color:var(--ink-faint);">Will populate as new calls are logged.</span>'; })()}
             </div>
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
               <button class="btn btn-outline mgr-delete-btn" data-name="${esc(r.name)}" style="color:var(--danger);border-color:var(--danger);font-size:12.5px;padding:6px 12px;">Remove ${esc(r.name)} from leaderboard</button>
@@ -2385,10 +2436,29 @@ function classifyPivotState(pieceId, level, context, notes){
   return 'no-issue';
 }
 
+/* Compelling-event spotting — a gentle, junior-friendly nudge: whenever a
+   customer answer in the Playbook walkthrough reveals that something is
+   CHANGING (a renewal, a move, growth, a refresh), surface a one-time tip
+   that this is the "right time" signal to anchor a follow-up to. Purely
+   encouraging — no scoring attached. The stable-branch notes explicitly say
+   "no near-term change", which the exclusion below filters out. */
+function maybeCompellingEventNudge(note){
+  if(!note) return;
+  if(/(no near-term change|nothing changing|no obvious change|no recent trigger|static for years)/i.test(note)) return;
+  if(/(change is coming|natural trigger|trigger point|could change|change coming|coming that could|raises the stakes|natural moment to revisit)/i.test(note)){
+    App.qual.timingNudge = "\ud83d\udca1 That's a compelling event \u2014 something changing is the natural reason to act NOW rather than someday. Worth asking when it lands (\u201cwhen does that kick in?\u201d) and noting the date.";
+  }
+}
 function renderQualNode(){
   const piece = PIECE_BY_ID[App.qual.pieceId];
   const node = piece.tree[App.qual.nodeId];
   const body = el('#qual-body');
+  const timingNudgeHTML = App.qual.timingNudge
+    ? `<div style="background:#E1FAF0;border:1px solid #9FE5C9;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#0A6B4C;line-height:1.5;">${esc(App.qual.timingNudge)}</div>`
+    : '';
+  App.qual.timingNudge = null; // show once, then clear
+  const paintNudge = ()=>{ if(timingNudgeHTML) body.insertAdjacentHTML('afterbegin', timingNudgeHTML); };
+  setTimeout(paintNudge, 0); // after whichever branch below writes body.innerHTML
 
   if(node.result){
     renderStepper(4);
@@ -2454,6 +2524,7 @@ function renderQualNode(){
       const optIdx = Number(b.dataset.optidx);
       const chosen = node.options[optIdx];
       if(chosen.note) App.qual.notes.push(chosen.note);
+      maybeCompellingEventNudge(chosen.note);
       App.qual.nodeId = chosen.next;
       App.qual.gatePassed = false; App.qual.revealedOption = null;
       renderQualNode();
@@ -2527,6 +2598,7 @@ function renderQualNode(){
         </div>`;
       el('#btn-gate-continue').addEventListener('click', ()=>{
         App.qual.notes.push(revealed.note || revealed.label);
+        maybeCompellingEventNudge(revealed.note);
         App.qual.nodeId = revealed.next;
         App.qual.gatePassed = false; App.qual.revealedOption = null;
         renderQualNode();
@@ -2683,9 +2755,9 @@ function difficultyMultiplierClause(){
    engines conform to exactly this key set, so adding a dimension here
    without wiring it into both engines fails the suite rather than silently
    diverging. */
-const TURN_SCORING_KEYS = ['piece','questionType','relevance','qualification','infoLevel','roleFit','listening','commercialJudgement','stakeholderID','reframing','note'];
+const TURN_SCORING_KEYS = ['piece','questionType','relevance','qualification','infoLevel','roleFit','listening','commercialJudgement','stakeholderID','reframing','timingAsk','note'];
 function turnScoringSchemaLine(){
-  return '{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "stakeholderID": false, "reframing": false, "note": "..."}}';
+  return '{"reply": "...", "scoring": {"piece": "..."/null, "questionType": "...", "relevance": 0, "qualification": "...", "infoLevel": 0, "roleFit": 0, "listening": 0, "commercialJudgement": 0, "stakeholderID": false, "reframing": false, "timingAsk": false, "note": "..."}}';
 }
 
 /* Deterministic detectors for the event-like dimensions (stakeholder
@@ -2722,6 +2794,20 @@ function detectReframingSignal(text, priorTurnScores){
     || /(bottom line|revenue|time it takes|hours)/.test(t)
     || /(affect|impact)s? (you|your|the team|the business)/.test(t);
 }
+function detectTimingAsk(text){
+  // "Right time" radar: credit a rep who proactively asks about contract
+  // dates, renewal windows, budget cycles, or when a planned change lands.
+  // Kept deliberately generous for junior reps — any genuine timing question
+  // counts; there is no penalty dimension attached to this detector.
+  const t = ' ' + String(text||'').toLowerCase() + ' ';
+  return /(renewal|renew(s|al)?\b|contract (end|ends|up|expir|run|runs|until)|out of contract|end of (the )?contract|notice period)/.test(t)
+    || /(budget (cycle|year|round)|financial year|next (budget|financial))/.test(t)
+    || /when (does|do|is|would|will|are you)/.test(t)
+    || /(what('| i)?s the )?time(line|frame|scale)/.test(t)
+    || /(good|right|best) time to/.test(t)
+    || /(coming up|on the horizon|planned|planning) .{0,24}(change|move|refresh|upgrade|renewal)/.test(t)
+    || /how (soon|long) (until|before|till)/.test(t);
+}
 function mergeDeterministicSignals(scoring, repText, priorTurnScores){
   // OR-merge: the deterministic layer can only ADD credit, never remove the
   // model's judgement — identical principle to the duplicate detector
@@ -2729,6 +2815,7 @@ function mergeDeterministicSignals(scoring, repText, priorTurnScores){
   // they can catch; the model still covers the subtle ones).
   scoring.stakeholderID = !!scoring.stakeholderID || detectStakeholderAsk(repText);
   scoring.reframing = !!scoring.reframing || detectReframingSignal(repText, priorTurnScores);
+  scoring.timingAsk = !!scoring.timingAsk || detectTimingAsk(repText);
   return scoring;
 }
 
@@ -2738,6 +2825,15 @@ function mergeDeterministicSignals(scoring, repText, priorTurnScores){
    developing-level need. Pitching after genuine qualification is fine;
    pitching before any need exists is the forced-selling anti-pattern the
    Manager Report needs to surface. */
+/* Coverage helper for the Discovery Journey map — which focus areas this
+   call actually surfaced evidence in (any turn that landed on a piece and
+   reached at least surface-level qualification). Deliberately inclusive:
+   the journey map is meant to encourage exploration, not gatekeep it. */
+function computePiecesDiscovered(turnScores){
+  return [...new Set((turnScores||[])
+    .filter(t=>!t.repetition && t.piece && (LEVEL_SCORE[t.qualification]||0) >= 1)
+    .map(t=>t.piece))];
+}
 function computeForcedSellingCount(turnScores){
   let established = false, forced = 0;
   (turnScores||[]).forEach(t=>{
@@ -2810,8 +2906,17 @@ function computeNextStepScore(turnScores, perArea){
    structurally rather than hoped-for). Null means "not applicable this
    call" and the dimension is simply not shown, rather than punishing a rep
    for a situation that never arose. */
-function computeDerivedDimensions(turnScores, perArea){
+function computeDerivedDimensions(turnScores, perArea, customerTexts){
   const turns = (turnScores||[]).filter(t=>!t.repetition);
+  // Timing radar — deliberately gentle for junior reps: asking about timing
+  // at all earns full marks; missing a timing cue the customer volunteered
+  // earns a nudge score of 1 (a tip, not a punishment); and if timing simply
+  // never came up either way, the dimension is null and not shown at all.
+  const timingAsks = turns.filter(t=>t.timingAsk).length;
+  const customerMentionedTiming = notesSuggestTimingBlock(customerTexts || []);
+  let timingScore = null;
+  if(timingAsks > 0) timingScore = 3;
+  else if(customerMentionedTiming) timingScore = 1;
   const misaimed = turns.filter(t=>Number.isFinite(t.roleFit) && t.roleFit <= 1).length;
   const stakeholderAsks = turns.filter(t=>t.stakeholderID).length;
   const reframes = turns.filter(t=>t.reframing).length;
@@ -2825,7 +2930,7 @@ function computeDerivedDimensions(turnScores, perArea){
   const nextStepScore = computeNextStepScore(turnScores, perArea);
   return {
     stakeholderScore, reframingScore, pivotQuality, nextStepScore,
-    stakeholderAsks, reframes,
+    stakeholderAsks, reframes, timingAsks, timingScore,
     nextStepSecured: nextStepScore >= 2,
     forcedSellingCount: computeForcedSellingCount(turnScores),
     deepestInfoLevel: Math.max(0, ...(turns.map(t=>t.infoLevel).filter(Number.isFinite)))
@@ -2864,6 +2969,29 @@ function pickFallbackProfile(difficulty, industry, role, size){
   if(!Array.isArray(profile.hints) || !profile.hints.length) profile.hints = genericHints(profile);
   return profile;
 }
+/* Wrong Room drill — offline profile picker. Prefers a fallback profile
+   whose MOST SEVERE hidden pain sits outside the drill contact's ownership
+   lane, so the rep genuinely has to notice they're talking to the wrong
+   person and ask for a referral. Falls back gracefully: any pain outside
+   the lane, then any profile at all (the AI/scoring still treats referral
+   asks as a win either way). Junior-friendly by design — the drill defaults
+   to the Guided persona so the contact stays pleasant while deflecting. */
+const SEVERITY_RANK = { high: 3, medium: 2, low: 1 };
+function pickWrongRoomFallback(difficulty, drillRole, industry, size){
+  const strong = (ROLE_KNOWLEDGE_PROFILE[drillRole] || {strongAreas:[]}).strongAreas;
+  const matching = FALLBACK_PROFILES.filter(p => (p.difficulty||'warm') === difficulty);
+  const pool = matching.length ? matching : FALLBACK_PROFILES;
+  const severest = p => p.hiddenPains.slice().sort((a,b)=>(SEVERITY_RANK[b.severity]||0)-(SEVERITY_RANK[a.severity]||0))[0];
+  let candidates = pool.filter(p => { const s = severest(p); return s && !strong.includes(s.piece); });
+  if(!candidates.length) candidates = pool.filter(p => p.hiddenPains.some(hp => !strong.includes(hp.piece)));
+  if(!candidates.length) candidates = pool;
+  const chosen = candidates[Math.floor(Math.random()*candidates.length)];
+  const profile = JSON.parse(JSON.stringify(chosen));
+  if(!Array.isArray(profile.hints) || !profile.hints.length) profile.hints = genericHints(profile);
+  profile.persona.role = drillRole;
+  return profile;
+}
+const WRONG_ROOM_ROLES = ['Office Manager', 'Finance Director (C-level)', 'Operations Director (C-level)'];
 async function newScenario(){
   const repName = el('#rep-name-input').value.trim();
   if(!repName){
@@ -2903,19 +3031,36 @@ async function newScenario(){
   stopListening();
   if(window.speechSynthesis) window.speechSynthesis.cancel();
 
-  const difficulty = pickDifficulty(el('#scenario-difficulty-select') ? el('#scenario-difficulty-select').value : null);
+  const wrToggle = el('#wrongroom-toggle');
+  App.wrongRoomDrill = !!(wrToggle && wrToggle.checked);
+  Coach.drillPraised = false;
+  const explicitDiff = el('#scenario-difficulty-select') ? el('#scenario-difficulty-select').value : null;
+  // Drill calls default to the Guided (warm) persona unless the rep
+  // explicitly chose harder — the skill being drilled is spotting the
+  // wrong contact, not surviving a hostile one.
+  const difficulty = App.wrongRoomDrill ? (explicitDiff || 'warm') : pickDifficulty(explicitDiff);
   App.context.difficulty = difficulty;
   const selectedIndustry = App.context.industry;
   const selectedRole = App.context.contactRole;
   const selectedSize = App.context.orgSize;
+  // For a drill call with no explicit role chosen, pick a plausible
+  // non-technical contact — the classic wrong-room situation.
+  const drillRole = App.wrongRoomDrill
+    ? (selectedRole || WRONG_ROOM_ROLES[Math.floor(Math.random()*WRONG_ROOM_ROLES.length)])
+    : selectedRole;
   let profile = null, mode = 'ai';
   if(!Settings.apiKey){
     mode = 'offline';
-    profile = pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize);
+    profile = App.wrongRoomDrill
+      ? pickWrongRoomFallback(difficulty, drillRole, selectedIndustry, selectedSize)
+      : pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize);
   } else {
-    try{ profile = await generateProfileViaAPI(difficulty, selectedIndustry, selectedRole, selectedSize); }
-    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize); }
+    try{ profile = await generateProfileViaAPI(difficulty, selectedIndustry, drillRole, selectedSize, App.wrongRoomDrill); }
+    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = App.wrongRoomDrill ? pickWrongRoomFallback(difficulty, drillRole, selectedIndustry, selectedSize) : pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize); }
   }
+  // Enforce the drill role client-side even in AI mode — the prompt asks
+  // for it, but a schema-level guarantee beats trusting the model.
+  if(App.wrongRoomDrill && profile && profile.persona && drillRole) profile.persona.role = drillRole;
   if(myGeneration !== App.scenarioGeneration){
     // A newer "New Scenario" request has started since this one began —
     // this response is stale. Discard it silently rather than let it
@@ -2936,6 +3081,9 @@ async function newScenario(){
   renderProfileCard();
   renderAreaRows();
   el('#chat-scroll').innerHTML = '<div class="chat-empty" id="chat-empty">Open with a broad Situation question about one of the focus areas.</div>';
+  if(App.wrongRoomDrill){
+    addBubble('system', "\ud83d\udeaa Wrong Room drill: somewhere in this business there's a real need \u2014 but this contact may not be the person who owns it. That happens on real calls all the time, and it's not a failure. The win here is noticing, staying friendly, and asking who the right person is. (Try something like: \u201cWho looks after that side of things for you?\u201d)");
+  }
   showTyping();
   await wait(typingDelayFor(profile.openingLine) * 0.4); // shorter than a full reply — it's just "Hello?"
   hideTyping();
@@ -3358,7 +3506,7 @@ async function sendRepMessage(){
     const note = `That's very close to something you already asked — "${dup.matchedQuestion}" (${dup.reason}). The customer's already told you about that; repeating it won't uncover anything new.` +
       (suggestion ? ` Try asking about ${suggestion} instead.` : ' Try a different angle, or move to the next stage.');
     addBubble('system', note);
-    Coach.turnScores.push({ piece, questionType: stage, relevance: 0, qualification: 'none', infoLevel: 0, roleFit: 2, listening: 0, commercialJudgement: 1, stakeholderID: false, reframing: false, note, repetition: true });
+    Coach.turnScores.push({ piece, questionType: stage, relevance: 0, qualification: 'none', infoLevel: 0, roleFit: 2, listening: 0, commercialJudgement: 1, stakeholderID: false, reframing: false, timingAsk: false, note, repetition: true });
     updateGauge();
     return; // preserve state, no engine call, no new/contradictory customer answer generated
   }
@@ -3397,6 +3545,10 @@ async function sendRepMessage(){
 // exchange, so later turns — and the final scorecard — can see what's
 // already been confirmed, ruled out, or flagged as a pain area.
 function updateConversationStateFromScoring(scoring, piece){
+  if(App.wrongRoomDrill && scoring && scoring.stakeholderID && !Coach.drillPraised){
+    Coach.drillPraised = true;
+    addBubble('system', "\ud83c\udfaf Nicely spotted \u2014 asking who owns it is exactly the right move. On a wrong-room call, a warm referral to the right person IS the win.");
+  }
   const state = Coach.conversationState;
   const turnIndex = Coach.messages.length;
   const targetPiece = scoring.piece || piece;
@@ -3446,7 +3598,7 @@ const SME_SECTOR_POOL = [
   "Car dealership group", "Motor repair/garage chain", "Agricultural machinery dealer", "Dairy/agri-food producer", "Fishing/seafood processor",
   "Waste management firm", "Facilities management company", "Security services firm", "Catering company", "Event management firm"
 ];
-async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole, selectedSize){
+async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole, selectedSize, wrongRoomDrill){
   difficulty = difficulty || 'warm';
   const suggestedSector = selectedIndustry || SME_SECTOR_POOL[Math.floor(Math.random()*SME_SECTOR_POOL.length)];
   const propensityAreas = (selectedIndustry || selectedRole || selectedSize) ? propensityAreasFor(selectedIndustry, selectedRole, selectedSize) : null;
@@ -3468,7 +3620,7 @@ async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole,
  "description": string (two short sentences giving real operational texture — number of sites, type of customers, general shape of day-to-day operations — enough to reasonably suggest relevant technology needs, e.g. multiple sites implies inter-site connectivity, guest-facing implies guest Wi-Fi and physical security, a mobile workforce implies device management. Do NOT state any of the specific hidden pains directly or name specific systems/vendors),
  "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
  "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "gender": "male"|"female" (matching the first name, used to pick an appropriate voice for text-to-speech), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"]${selectedRole ? ` — the rep has specifically chosen to practice against a "${selectedRole}" contact, so use exactly this role` : ''}, "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
- "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away.${propensityAreas ? ` Given the chosen industry/role/size, these focus areas have the highest real-world propensity for this combination and at least one hidden pain (ideally the most severe one) should come from this list: [${propensityAreas.map(a=>'"'+a+'"').join(', ')}] — but include at least one other area too, since a real business rarely has just one issue,` : ''}${roleProfile ? ` IMPORTANT — since the contact is specifically a "${selectedRole}": at least one hidden pain should be something this role would plausibly know about and be able to discuss (their natural strong areas are: [${roleProfile.strongAreas.map(a=>'"'+a+'"').join(', ')}]) — a Finance Director realistically won't know firewall configuration detail, an Office Manager realistically won't own security strategy, and so on. It's fine and realistic to ALSO include a hidden pain outside their direct ownership (e.g. security, if they're not IT) as long as the description/detail makes clear they'd need to defer or refer the rep elsewhere on that one specifically,` : ''}
+ "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away.${propensityAreas ? ` Given the chosen industry/role/size, these focus areas have the highest real-world propensity for this combination and at least one hidden pain (ideally the most severe one) should come from this list: [${propensityAreas.map(a=>'"'+a+'"').join(', ')}] — but include at least one other area too, since a real business rarely has just one issue,` : ''}${roleProfile ? ` IMPORTANT — since the contact is specifically a "${selectedRole}": at least one hidden pain should be something this role would plausibly know about and be able to discuss (their natural strong areas are: [${roleProfile.strongAreas.map(a=>'"'+a+'"').join(', ')}]) — a Finance Director realistically won't know firewall configuration detail, an Office Manager realistically won't own security strategy, and so on. It's fine and realistic to ALSO include a hidden pain outside their direct ownership (e.g. security, if they're not IT) as long as the description/detail makes clear they'd need to defer or refer the rep elsewhere on that one specifically,` : ''}${wrongRoomDrill ? ` WRONG-ROOM TRAINING DRILL — override the usual balance: the MOST SEVERE hidden pain must sit clearly OUTSIDE this contact's ownership areas, so a rep who probes it well discovers this contact genuinely cannot answer in depth. The persona stays friendly and helpful throughout, openly names WHO in the business does own that area when asked (a named colleague or an external IT provider), and happily offers an introduction if the rep asks for one. This is a training exercise in recognising the wrong contact — the persona should never fake expertise it would not have,` : ''}
  "openingLine": string, must be ONLY a short, simple way of answering an incoming phone call \u2014 like "Hello?", "Hello, [Name] speaking", or "[Company name], hello" \u2014 nothing more. Do NOT include any context, availability, tone-setting, or hint about being busy/receptive/rushed \u2014 the rep hasn't spoken yet, so the persona has no idea who's calling or why. Save all tone and personality for how they respond AFTER the rep's first message,
  "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
    - exactly 1 of type "news": a plausible, general (not fabricated specific/false) industry news angle relevant to this sector that could open a conversation, e.g. "Ransomware attacks on small hospitality businesses have been widely reported recently — worth raising as a natural opener." Keep it generic/plausible, not a specific invented headline or company,
@@ -3582,6 +3734,7 @@ Score it as:
 - commercialJudgement: integer 0-3, overall business judgement shown in this specific message — reading buying signals correctly, not forcing a pitch prematurely, recognising when to stop pushing a dead line of questioning — 3 = excellent judgement for the moment, 0 = poor judgement (e.g. pitching before any need is established, or ignoring a clear signal to stop)
 - stakeholderID: boolean — true ONLY if this specific message genuinely tries to identify or reach the right stakeholder for a topic (asking who owns/handles an area, asking for an introduction or referral, asking who else is involved in a decision). Ordinary discovery questions are false.
 - reframing: boolean — true ONLY if this specific message re-asks or re-angles something previously misaimed (too technical, or outside this contact's role) in business terms this contact CAN speak to (cost, time, disruption, day-to-day impact). A first-time business-terms question with nothing misaimed before it is false.
+- timingAsk: boolean — true ONLY if this specific message genuinely asks about timing: contract or renewal dates, budget cycles, when a planned change lands, or when would be the right time to act. Ordinary discovery questions with no timing angle are false.
 - note: one or two short, encouraging coaching-style sentences that explain the REASONING, not just praise or criticise — what they did well or could improve, whether this contact was even the right person to ask about this topic, and if there's a clearly better next move (probe deeper, pivot to a different area, or ask for the right stakeholder), name it briefly
 
 Respond with ONLY a valid JSON object, no markdown fences, exactly this shape:
@@ -3705,14 +3858,14 @@ function localRoleplayTurn(repText){
   if(pieceId && priorPain){
     return {
       reply: `As I mentioned, that's a real issue for us — ${hiddenPain ? hiddenPain.detail : 'the same one I flagged before'}. Anything specific you want to know about it?`,
-      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 2, qualification: 'developing', infoLevel: 3, roleFit: 2, listening: 3, commercialJudgement: 2, stakeholderID: false, reframing: false,
+      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 2, qualification: 'developing', infoLevel: 3, roleFit: 2, listening: 3, commercialJudgement: 2, stakeholderID: false, reframing: false, timingAsk: false,
         note: 'Good to circle back, but this was already confirmed — worth pushing into a new dimension (impact, timing, stakeholders) rather than re-confirming the same fact.' }
     };
   }
   if(pieceId && priorRuledOut){
     return {
       reply: `Like I said, that one's genuinely fine for us — not something we're dealing with.`,
-      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 1, qualification: 'surface', infoLevel: 0, roleFit: 2, listening: 1, commercialJudgement: 1, stakeholderID: false, reframing: false,
+      scoring: { piece: pieceId, questionType: preClassifyStage(repText), relevance: 1, qualification: 'surface', infoLevel: 0, roleFit: 2, listening: 1, commercialJudgement: 1, stakeholderID: false, reframing: false, timingAsk: false,
         note: "This area was already ruled out — re-asking it won't change the answer. Consider pivoting to a different focus area instead." }
     };
   }
@@ -3755,7 +3908,7 @@ function localRoleplayTurn(repText){
   else if(hiddenPain){ reply = pickUnusedReply(HINTS, 'hint', state); qualification='developing'; relevance=2; infoLevel=1; roleFit=2; }
   else if(pieceId){ reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='surface'; relevance=1; infoLevel=0; roleFit=2; }
   else { reply = pickUnusedReply(DEFLECTIONS, 'deflect', state); qualification='none'; relevance=0; infoLevel=0; roleFit=1; }
-  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, infoLevel, roleFit, listening, commercialJudgement, stakeholderID: false, reframing: false, note } };
+  return { reply, scoring:{ piece:pieceId, questionType, relevance, qualification, infoLevel, roleFit, listening, commercialJudgement, stakeholderID: false, reframing: false, timingAsk: false, note } };
 }
 function detectPivot(turnScores){
   // Looks for a "none"/low-relevance turn on one piece followed later by a
@@ -3847,7 +4000,15 @@ async function endScenario(){
   // per-turn record regardless of which engine produced the scorecard — so
   // AI mode and offline mode agree on these by construction rather than by
   // hoping two separately-written implementations stay in sync.
-  data.derived = computeDerivedDimensions(Coach.turnScores, data.perArea);
+  data.derived = computeDerivedDimensions(Coach.turnScores, data.perArea,
+    Coach.messages.filter(m=>m.who==='customer').map(m=>m.text));
+  if(data.derived.timingScore === 1){
+    // The customer mentioned a renewal/contract/budget-cycle cue and the rep
+    // didn't follow it up — add one friendly, concrete tip rather than a
+    // penalty. Capped so the improvements list stays readable.
+    data.improvements = (data.improvements || []).slice(0, 4);
+    data.improvements.push("Timing tip: they mentioned a contract, renewal or budget timeline — a quick \"when does that run to?\" turns interest into a diary date you can actually act on.");
+  }
   renderScorecard(data); openModal();
 
   // Aggregate per-turn SPIN-stage stats (situation/problem/implication/needpayoff/
@@ -3893,6 +4054,10 @@ async function endScenario(){
     nextStepScore: Number.isFinite(d.nextStepScore) ? d.nextStepScore : null,
     nextStepSecured: !!d.nextStepSecured,
     forcedSellingCount: d.forcedSellingCount || 0,
+    timingAsks: d.timingAsks || 0,
+    timingScore: Number.isFinite(d.timingScore) ? d.timingScore : null,
+    wrongRoomDrill: !!App.wrongRoomDrill,
+    piecesDiscovered: computePiecesDiscovered(Coach.turnScores),
     missedPains: data.missedPains || [],
     improvements: data.improvements || [],
     strengths: data.strengths || []
@@ -3938,7 +4103,14 @@ function renderScorecard(data){
       <div class="ac-note">${esc(a.note||'')}</div>
     </div>`;
   }).join('');
-  el('#modal-areas').innerHTML = areasHTML || '<p class="log-empty">No areas were explored during this call.</p>';
+  let drillHTML = '';
+  if(App.wrongRoomDrill){
+    const asks = (data.derived && data.derived.stakeholderAsks) || 0;
+    drillHTML = asks > 0
+      ? `<div class="area-card rag-green" style="margin-bottom:10px;"><div class="ac-top"><span class="ac-name">\ud83d\udeaa Wrong Room drill \u2014 passed!</span></div><div class="ac-note">You recognised this contact wasn't the owner and asked who the right person is \u2014 exactly the skill this drill trains. On a real call, that warm referral is a genuine win, not a dead end.</div></div>`
+      : `<div class="area-card rag-amber" style="margin-bottom:10px;"><div class="ac-top"><span class="ac-name">\ud83d\udeaa Wrong Room drill \u2014 one thing to try next time</span></div><div class="ac-note">This contact didn't own the biggest need in the business \u2014 completely normal on real calls, and nothing you did caused it. Next time a contact can't answer in depth, try a friendly \u201cWho looks after that side of things?\u201d \u2014 a referral to the right person counts as a win here.</div></div>`;
+  }
+  el('#modal-areas').innerHTML = drillHTML + (areasHTML || '<p class="log-empty">No areas were explored during this call.</p>');
 
   const missedWrap = el('#modal-missed-wrap');
   if(data.missedPains && data.missedPains.length){
@@ -4001,6 +4173,7 @@ function renderScorecard(data){
     { key:'stakeholderScore', label:'Stakeholder identification', max:3 },
     { key:'reframingScore', label:'Reframing', max:3 },
     { key:'pivotQuality', label:'Pivot quality', max:3 },
+    { key:'timingScore', label:'Timing radar', max:3 },
     { key:'nextStepScore', label:'Next step', max:3 }
   ].forEach(d=>{
     if(Number.isFinite(dv[d.key])) dimAverages.push({ ...d, avg: dv[d.key] });

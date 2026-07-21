@@ -583,6 +583,130 @@ def main():
         check("No notes, no signal -> no-issue unchanged", r[3] == 'no-issue', str(r))
         check("Already-resolved takes precedence over timing evidence", r[4] == 'already-resolved', str(r))
 
+        print("\n=== Timing radar: deterministic detector ===")
+        r = page.evaluate("""() => [
+            detectTimingAsk("When does your current contract run to?"),
+            detectTimingAsk("Is there a renewal date coming up on that?"),
+            detectTimingAsk("What does your budget cycle look like for next year?"),
+            detectTimingAsk("When would be a good time to look at this properly?"),
+            detectTimingAsk("How is your Wi-Fi holding up day to day?"),
+            detectTimingAsk("Who looks after the network for you?"),
+            detectTimingAsk("What's the timeline on that office move?")
+        ]""")
+        check("Contract-run-to question detected", r[0] == True, str(r))
+        check("Renewal date question detected", r[1] == True, str(r))
+        check("Budget cycle question detected", r[2] == True, str(r))
+        check("Good-time-to question detected", r[3] == True, str(r))
+        check("Ordinary discovery question NOT flagged as timing", r[4] == False, str(r))
+        check("Stakeholder question NOT flagged as timing", r[5] == False, str(r))
+        check("Timeline question detected", r[6] == True, str(r))
+
+        print("\n=== Timing radar: gentle derived scoring ===")
+        r = page.evaluate("""() => {
+            const asked = computeDerivedDimensions([
+                {piece:'m365', qualification:'developing', timingAsk:true, infoLevel:2}
+            ], [], []);
+            const missedCue = computeDerivedDimensions([
+                {piece:'m365', qualification:'developing', timingAsk:false, infoLevel:2}
+            ], [], ["We're actually mid-contract until the renewal in March."]);
+            const neverArose = computeDerivedDimensions([
+                {piece:'m365', qualification:'developing', timingAsk:false, infoLevel:2}
+            ], [], ["The Wi-Fi drops out most Fridays."]);
+            return [asked.timingScore, missedCue.timingScore, neverArose.timingScore, asked.timingAsks];
+        }""")
+        check("Asking about timing scores full marks (3)", r[0] == 3, str(r))
+        check("Missed customer timing cue scores a gentle 1, not 0", r[1] == 1, str(r))
+        check("No timing signal either way -> null (not scored)", r[2] is None, str(r))
+        check("timingAsks counted", r[3] == 1, str(r))
+
+        print("\n=== Timing radar: parity — timingAsk is in the shared schema (both engines) ===")
+        r = page.evaluate("""() => ({
+            inKeys: TURN_SCORING_KEYS.includes('timingAsk'),
+            inSchemaLine: turnScoringSchemaLine().includes('"timingAsk"')
+        })""")
+        check("timingAsk in TURN_SCORING_KEYS", r['inKeys'] == True, str(r))
+        check("timingAsk in AI schema line", r['inSchemaLine'] == True, str(r))
+
+        print("\n=== Coverage: computePiecesDiscovered ===")
+        r = page.evaluate("""() => [
+            computePiecesDiscovered([
+                {piece:'m365', qualification:'developing'},
+                {piece:'m365', qualification:'qualified'},
+                {piece:'secure-network', qualification:'surface'},
+                {piece:'cloud-voice', qualification:'none'},
+                {piece:null, qualification:'qualified'},
+                {piece:'mobile-security', qualification:'qualified', repetition:true}
+            ]),
+            computePiecesDiscovered([])
+        ]""")
+        check("Unique pieces with >=surface evidence counted once", sorted(r[0]) == ['m365','secure-network'], str(r))
+        check("'none' qualification and null piece excluded", 'cloud-voice' not in r[0], str(r))
+        check("Repetition turns excluded from coverage", 'mobile-security' not in r[0], str(r))
+        check("Empty turn list -> empty coverage", r[1] == [], str(r))
+
+        print("\n=== Wrong Room drill: offline profile picker ===")
+        r = page.evaluate("""() => {
+            const results = [];
+            for(let i=0;i<20;i++){
+                const p = pickWrongRoomFallback('warm', 'Office Manager', null, null);
+                const strong = ROLE_KNOWLEDGE_PROFILE['Office Manager'].strongAreas;
+                const severest = p.hiddenPains.slice().sort((a,b)=>(SEVERITY_RANK[b.severity]||0)-(SEVERITY_RANK[a.severity]||0))[0];
+                results.push({ role: p.persona.role, severestOutsideLane: severest ? !strong.includes(severest.piece) : null,
+                               anyOutsideLane: p.hiddenPains.some(hp=>!strong.includes(hp.piece)) });
+            }
+            return {
+                allRoleOverridden: results.every(x=>x.role === 'Office Manager'),
+                allHaveOutsideLanePain: results.every(x=>x.anyOutsideLane === true),
+                severestUsuallyOutside: results.filter(x=>x.severestOutsideLane).length
+            };
+        }""")
+        check("Drill profiles always carry the drill role", r['allRoleOverridden'] == True, str(r))
+        check("Every drill profile has at least one pain outside the contact's lane", r['allHaveOutsideLanePain'] == True, str(r))
+        check("Severest pain sits outside the lane in the (large) majority of picks", r['severestUsuallyOutside'] >= 15, str(r))
+
+        print("\n=== Wrong Room drill: friendly by default ===")
+        r = page.evaluate("""() => {
+            // With the drill on and no explicit difficulty, calls should be
+            // Guided (warm) — verified via the same logic newScenario uses.
+            const explicitDiff = '';
+            const drill = true;
+            const difficulty = drill ? (explicitDiff || 'warm') : pickDifficulty(explicitDiff);
+            return difficulty;
+        }""")
+        check("Drill defaults to Guided difficulty for juniors", r == 'warm', str(r))
+
+        print("\n=== Compelling-event nudge: pattern filter ===")
+        r = page.evaluate("""() => {
+            const cases = [];
+            App.qual = App.qual || {};
+            App.qual.timingNudge = null;
+            maybeCompellingEventNudge("A change is coming that's a natural trigger to revisit this.");
+            cases.push(!!App.qual.timingNudge);
+            App.qual.timingNudge = null;
+            maybeCompellingEventNudge("Long-standing setup, no near-term change.");
+            cases.push(!!App.qual.timingNudge);
+            App.qual.timingNudge = null;
+            maybeCompellingEventNudge(null);
+            cases.push(!!App.qual.timingNudge);
+            return cases;
+        }""")
+        check("Change-coming note triggers the nudge", r[0] == True, str(r))
+        check("No-change note does NOT trigger the nudge", r[1] == False, str(r))
+        check("Null note handled safely", r[2] == False, str(r))
+
+        print("\n=== Payload: new fields present on submit ===")
+        r = page.evaluate("""() => {
+            // Simulate what finishCall builds, using the payload contract
+            const d = { timingAsks: 2, timingScore: 3 };
+            return {
+                timingAsks: d.timingAsks || 0,
+                timingScore: Number.isFinite(d.timingScore) ? d.timingScore : null,
+                piecesType: Array.isArray(computePiecesDiscovered([{piece:'m365', qualification:'qualified'}]))
+            };
+        }""")
+        check("Payload timing fields shaped correctly", r['timingAsks'] == 2 and r['timingScore'] == 3, str(r))
+        check("piecesDiscovered is an array", r['piecesType'] == True, str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")

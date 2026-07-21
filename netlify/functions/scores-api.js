@@ -21,7 +21,7 @@ const MAX_ENTRIES = 2000; // simple cap so the blob can't grow unbounded
 // Manager Report. Without this split, the sensitive coaching data would be
 // readable by anyone who called this endpoint directly, regardless of
 // whether the manager password gate in the UI was ever shown.
-const PUBLIC_FIELDS = ['name', 'score', 'level', 'company', 'difficulty', 'timestamp'];
+const PUBLIC_FIELDS = ['name', 'score', 'level', 'company', 'difficulty', 'timestamp', 'piecesDiscovered'];
 function toPublicEntry(e){
   const out = {};
   PUBLIC_FIELDS.forEach(f => { out[f] = e[f]; });
@@ -110,6 +110,13 @@ exports.handler = async (event) => {
       nextStepScore: Number.isFinite(Number(payload.nextStepScore)) ? Number(payload.nextStepScore) : null,
       nextStepSecured: typeof payload.nextStepSecured === 'boolean' ? payload.nextStepSecured : null,
       forcedSellingCount: Number.isFinite(Number(payload.forcedSellingCount)) ? Number(payload.forcedSellingCount) : null,
+      timingAsks: Number.isFinite(Number(payload.timingAsks)) ? Number(payload.timingAsks) : 0,
+      timingScore: Number.isFinite(Number(payload.timingScore)) ? Number(payload.timingScore) : null,
+      wrongRoomDrill: typeof payload.wrongRoomDrill === 'boolean' ? payload.wrongRoomDrill : false,
+      // Coverage for the Discovery Journey map — which focus areas this call
+      // surfaced. Benign (no coaching detail), so it's also in PUBLIC_FIELDS
+      // to power the rep-facing journey grid without a manager token.
+      piecesDiscovered: Array.isArray(payload.piecesDiscovered) ? payload.piecesDiscovered.slice(0, 12).map(s => String(s).slice(0, 40)) : [],
       missedPains: Array.isArray(payload.missedPains) ? payload.missedPains.slice(0, 10).map(s => String(s).slice(0, 200)) : [],
       improvements: Array.isArray(payload.improvements) ? payload.improvements.slice(0, 10).map(s => String(s).slice(0, 300)) : [],
       strengths: Array.isArray(payload.strengths) ? payload.strengths.slice(0, 10).map(s => String(s).slice(0, 300)) : [],
