@@ -2024,7 +2024,7 @@ async function renderManagerReport(){
       </table>
       </div>
     </div>
-    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each SPIN stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>
+    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each discovery stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>
     <div class="mgr-rationale-section">
       <h4 style="font-size:13px;color:var(--navy);margin:24px 0 6px;font-family:var(--font-head);">Propensity model rationale (auditable)</h4>
       <p style="font-size:12px;color:var(--ink-faint);margin:0 0 12px;">Pick a combination to see exactly why the system suggests certain focus areas for it — every score below is a training heuristic, not verified market data. Confidence reflects how directly the reasoning applies, not statistical certainty.</p>
@@ -2222,7 +2222,7 @@ function renderPrimer(){
       <div class="reg-note">📋 ${esc(p.regulatoryNote)}</div>` : '')}
       <h4>Why they should talk to you</h4>
       <p>${esc(p.valueProp)}</p>
-      <h4>Example SPIN questions</h4>
+      <h4>Example discovery questions</h4>
       <div class="primer-spin">
         <div><span class="spin-tag situation">Situation</span>${esc(p.exampleQuestions.situation)}</div>
         <div><span class="spin-tag problem">Problem</span>${esc(p.exampleQuestions.problem)}</div>
