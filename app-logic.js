@@ -1409,10 +1409,10 @@ const TRAINING_SECTIONS = [
 },
 {
   title:'Discovery Questions',
-  sub:'Situation, Problem, Implication, Need-payoff — the questioning sequence used throughout this site.',
+  sub:'The Discovery Ladder — Situation, Problem, Impact, Value — the questioning sequence used throughout this site.',
   html:`
-    <h4>The four-step pattern</h4>
-    <p>Situation, Problem, Implication, Need-payoff — this is the questioning order used throughout this site. Once you've used it a few times it starts to feel natural, not like a formula you're forcing.</p>
+    <h4>The Discovery Ladder — the four-step pattern</h4>
+    <p>Situation, Problem, Impact, Value — this is the questioning order used throughout this site. Once you've used it a few times it starts to feel natural, not like a formula you're forcing.</p>
     <h4>Situation questions: broad, low-pressure, and kept to a minimum</h4>
     <p>These establish context — what they have today, how things are set up. They're necessary, but they're the least valuable part of the call, and over-asking them reads as an interrogation. Use just enough to orient yourself, then move on quickly.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"How are things set up today for [area] — what are you currently using?"</div>
@@ -1420,12 +1420,12 @@ const TRAINING_SECTIONS = [
     <h4>Problem questions: where real discovery starts</h4>
     <p>These surface difficulties, dissatisfactions or concerns connected to the situation they just described. This is where you stop collecting facts and start listening for something that actually matters to them.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"How's that been working for you — anything that causes friction day to day?"</div>
-    <h4>Implication questions: the step most reps skip</h4>
+    <h4>Impact questions: the step most reps skip</h4>
     <p>A stated problem isn't automatically a reason to buy. Ask what it actually costs them — in time, money, risk, or hassle. That's what turns a mild complaint into something worth fixing now.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"When that happens, what does it actually cost you — lost time, frustrated staff, missed business?"</div>
     <p><strong>If you remember one thing from this whole page, make it this:</strong> jumping straight from Problem to pitching, without asking what it costs them, is the single most common discovery mistake.</p>
-    <h4>Need-payoff questions: let them say the value out loud</h4>
-    <p>Rather than you telling them why your solution matters, a good need-payoff question gets the prospect to state the value themselves — which makes it far stickier than anything you could say.</p>
+    <h4>Value questions: let them say the value out loud</h4>
+    <p>Rather than you telling them why your solution matters, a good value question gets the prospect to state the value themselves — which makes it far stickier than anything you could say.</p>
     <div class="train-quote"><span class="qlabel">Example</span>"If that stopped happening altogether, what would that be worth to the business?"</div>
     <h4>Open questions versus closed questions</h4>
     <p>An open question invites a real answer. A closed question invites "yes" or "no" — and tells you almost nothing. Both have a place, but if your call is mostly closed questions, you're not really doing discovery.</p>
@@ -1446,13 +1446,13 @@ const TRAINING_SECTIONS = [
       <div class="train-do"><span class="dd-label">Do</span><ul>
         <li>Ask one question, then stop talking and listen</li>
         <li>Follow a vague answer with a more specific one</li>
-        <li>Let Implication questions do the persuading, not your pitch</li>
+        <li>Let Impact questions do the persuading, not your pitch</li>
         <li>Leave a short pause after your question</li>
       </ul></div>
       <div class="train-dont"><span class="dd-label">Don't</span><ul>
         <li>Stack three questions into one breath</li>
         <li>Treat this as a checklist to tick rather than a conversation</li>
-        <li>Jump to positioning before Implication is actually established</li>
+        <li>Jump to positioning before Impact is actually established</li>
         <li>Rush to fill every silence</li>
       </ul></div>
     </div>
@@ -1460,8 +1460,8 @@ const TRAINING_SECTIONS = [
     <ul>
       <li>I asked no more than two or three Situation questions before moving on</li>
       <li>I found at least one real Problem, not just a factual situation</li>
-      <li>I asked at least one Implication question — what does it cost them?</li>
-      <li>I let them state the value themselves with a Need-payoff question</li>
+      <li>I asked at least one Impact question — what does it cost them?</li>
+      <li>I let them state the value themselves with a Value question</li>
       <li>I was talking less than a third of the time</li>
     </ul>`
 },
@@ -1531,7 +1531,7 @@ const TRAINING_SECTIONS = [
     <h4>If they ask about price early</h4>
     <p>It's common for a prospect to ask "how much does this cost?" before you've finished discovery. You don't need to dodge the question, but answering it properly usually means understanding their situation first. A short, honest bridge works well.</p>
     <div class="train-quote"><span class="qlabel">Say this</span>"Good question, and I'll absolutely get you a number — it depends a bit on scale, so let me ask two more quick things first so what I give you is actually accurate rather than a guess."</div>
-    <h4>Use the Need-payoff answer as your bridge into next steps</h4>
+    <h4>Use the Value answer as your bridge into next steps</h4>
     <p>If they've already told you what the fix would be worth to them, close by referencing that value directly, then move straight into a concrete next step rather than leaving it open-ended.</p>
     <div class="train-quote"><span class="qlabel">Say this</span>"You said that would be worth a lot to you if it stopped happening — that's exactly what this fixes. The natural next step is a short call with one of our specialists to scope it properly — does later this week work?"</div>
     <div class="train-dodont">
@@ -1551,7 +1551,7 @@ const TRAINING_SECTIONS = [
     <h4>Quick checklist before you position anything</h4>
     <ul>
       <li>I can repeat back, in their words, what the problem actually is</li>
-      <li>I know what it costs them — I asked an Implication question already</li>
+      <li>I know what it costs them — I asked an Impact question already</li>
       <li>I'm connecting one specific fix to one specific pain, not listing everything</li>
       <li>I have a concrete next step ready to suggest</li>
     </ul>`
@@ -1814,7 +1814,12 @@ async function initManagerView(){
   btn.onclick = tryUnlock; // .onclick (not addEventListener) so re-entering this view doesn't stack duplicate handlers
   input.onkeydown = (e)=>{ if(e.key==='Enter') tryUnlock(); };
 }
-const STAGE_LABELS = {situation:'Situation', problem:'Problem', implication:'Implication', needpayoff:'Need-payoff', closed:'Closed', other:'Other'};
+// Brand name for the four-stage discovery framework. To rename the framework,
+// change this constant and the matching heading in index.html's overview key.
+const FRAMEWORK_NAME = 'The Discovery Ladder';
+// Display labels only — internal keys (situation/problem/implication/needpayoff)
+// are unchanged so all scoring, AI classification and aggregation still work.
+const STAGE_LABELS = {situation:'Situation', problem:'Problem', implication:'Impact', needpayoff:'Value', closed:'Closed', other:'Other'};
 function aggregateManagerData(entries){
   const byName = {};
   entries.forEach(e=>{
@@ -1948,7 +1953,7 @@ async function renderManagerReport(){
       <div class="mgr-stat"><div class="mgr-stat-num">${reps.length}</div><div class="mgr-stat-label">Active reps</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgScore}/100</div><div class="mgr-stat-label">Team avg score</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${teamAvgRelevance ?? '—'}/3</div><div class="mgr-stat-label">Avg question relevance</div></div>
-      <div class="mgr-stat"><div class="mgr-stat-num">${goodStagePct}%</div><div class="mgr-stat-label">Questions were Implication / Need-payoff</div></div>
+      <div class="mgr-stat"><div class="mgr-stat-num">${goodStagePct}%</div><div class="mgr-stat-label">Questions were Impact / Value</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${nextStepConversion !== null ? nextStepConversion+'%' : '—'}</div><div class="mgr-stat-label">Calls ending with a clear next step</div></div>
       <div class="mgr-stat"><div class="mgr-stat-num">${forcedIncidents || (forcedEntries.length ? 0 : '—')}</div><div class="mgr-stat-label">Forced-selling incidents (pitching before any need was established${forcedCallPct !== null ? ' — on '+forcedCallPct+'% of calls' : ''})</div></div>
     </div>
@@ -1974,7 +1979,7 @@ async function renderManagerReport(){
           <th style="padding:10px 14px;font-size:12px;">Avg score</th>
           <th style="padding:10px 14px;font-size:12px;">Trend</th>
           <th style="padding:10px 14px;font-size:12px;">Avg relevance</th>
-          <th style="padding:10px 14px;font-size:12px;">Question mix (S·P·I·N·Closed·Other)</th>
+          <th style="padding:10px 14px;font-size:12px;">Question mix (by discovery stage)</th>
           <th style="padding:10px 14px;font-size:12px;">Areas touched/call</th>
         </tr>
         ${reps.map((r,i)=>`
@@ -2024,7 +2029,7 @@ async function renderManagerReport(){
       </table>
       </div>
     </div>
-    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each discovery stage across all their calls — more Implication and Need-payoff (right side) generally means stronger discovery discipline.</p>
+    <p style="font-size:11.5px;color:var(--ink-faint);">Click a row to see recent calls and current coaching focus for that rep. "Question mix" bars show the share of questions in each discovery stage across all their calls — more Impact and Value (right side) generally means stronger discovery discipline.</p>
     <div class="mgr-rationale-section">
       <h4 style="font-size:13px;color:var(--navy);margin:24px 0 6px;font-family:var(--font-head);">Propensity model rationale (auditable)</h4>
       <p style="font-size:12px;color:var(--ink-faint);margin:0 0 12px;">Pick a combination to see exactly why the system suggests certain focus areas for it — every score below is a training heuristic, not verified market data. Confidence reflects how directly the reasoning applies, not statistical certainty.</p>
@@ -2146,8 +2151,8 @@ function renderHome(){
 const STEP_DEFS = [
   {key:'situation', label:'Situation'},
   {key:'problem', label:'Problem'},
-  {key:'implication', label:'Implication'},
-  {key:'needpayoff', label:'Need-payoff'},
+  {key:'implication', label:'Impact'},
+  {key:'needpayoff', label:'Value'},
   {key:'result', label:'Close'}
 ];
 function startPiece(pieceId){
@@ -2226,8 +2231,8 @@ function renderPrimer(){
       <div class="primer-spin">
         <div><span class="spin-tag situation">Situation</span>${esc(p.exampleQuestions.situation)}</div>
         <div><span class="spin-tag problem">Problem</span>${esc(p.exampleQuestions.problem)}</div>
-        <div><span class="spin-tag implication">Implication</span>${esc(p.exampleQuestions.implication)}</div>
-        <div><span class="spin-tag needpayoff">Need-payoff</span>${esc(p.exampleQuestions.needpayoff)}</div>
+        <div><span class="spin-tag implication">Impact</span>${esc(p.exampleQuestions.implication)}</div>
+        <div><span class="spin-tag needpayoff">Value</span>${esc(p.exampleQuestions.needpayoff)}</div>
       </div>
       ${p.objections && p.objections.length ? `
       <h4>Common objections here, and how to handle them</h4>
@@ -2539,7 +2544,7 @@ function renderQualNode(){
     // same piece plays out a little differently each time).
     const stepIdx = currentStepIndex(node);
     renderStepper(stepIdx);
-    const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Implication Question', needpayoff:'Need-payoff Question'};
+    const badgeLabels = {situation:'Situation Question', problem:'Problem Question', implication:'Impact Question', needpayoff:'Value Question'};
     const badgeLabel = badgeLabels[node.type] || '';
     const contextualQ = contextualiseQuestion(node.q, App.qual.pieceId, App.context, node.type);
     // Memory panel — surfaces what's already been established in THIS
@@ -3176,7 +3181,7 @@ function updateGauge(){
   const last = Coach.turnScores[Coach.turnScores.length-1];
   const lf = el('#last-feedback');
   if(last){
-    const typeLabels = {situation:'Situation', problem:'Problem', implication:'Implication', needpayoff:'Need-payoff', closed:'Closed question', other:'Other'};
+    const typeLabels = {situation:'Situation', problem:'Problem', implication:'Impact', needpayoff:'Value', closed:'Closed question', other:'Other'};
     lf.innerHTML = `<div class="lf-top"><span class="lf-type">${esc(typeLabels[last.questionType]||'Question')}</span><span class="lf-relevance">Relevance ${last.relevance}/3</span></div><div class="lf-note">${esc(last.note||'')}</div>`;
     lf.classList.remove('hidden');
   } else {
