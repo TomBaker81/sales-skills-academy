@@ -2377,7 +2377,12 @@ function pickRevealedOption(node){
   // Still not guaranteed, to keep some realistic variety.
   const highIdx = opts.findIndex(o => o.impact === 'high' || o.engagement === 'positive');
   if(highIdx !== -1){
-    return Math.random() < 0.72 ? opts[highIdx] : opts[highIdx === 0 ? 1 : 0];
+    // Value stage on a no-pain base leans non-committal (30% positive) rather
+    // than the usual 72% — a healthy setup reading as a keen buyer was the last
+    // remaining incongruity. Real problems keep the positive lean. Some goodwill
+    // positives still occur on healthy bases (the "No Pain, Some Goodwill" close).
+    const favourChance = node.leanHesitant ? 0.30 : 0.72;
+    return Math.random() < favourChance ? opts[highIdx] : opts[highIdx === 0 ? 1 : 0];
   }
   // Situation/Problem stages (and their follow-ups): genuine variety in what
   // the fictional customer's actual circumstances are — the rep can't

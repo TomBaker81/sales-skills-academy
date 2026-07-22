@@ -934,6 +934,39 @@ def main():
         check("Fully-enrolled frequency stays occasional/rare", set(r['freqOptions'])<=set(['occasional','rare']), str(r['freqOptions']))
         check("Fully-enrolled wider-impact follow-up stays contained (not compliance/trust)", 'contained' in r['loFollowUpReveal'].lower() or 'whole picture' in r['loFollowUpReveal'].lower() or "that's really it" in r['loFollowUpReveal'].lower(), str(r['loFollowUpReveal']))
 
+        print("\n=== Option A extension: Value stage engagement bound to severity ===")
+        r = page.evaluate("""() => {
+            const rep = { healthyValueNodes:0, taggedLean:0, realValueNodes:0, wronglyTagged:0 };
+            for(const pid of PIECE_IDS){
+                const piece = PIECE_BY_ID[pid];
+                for(const [nodeId,node] of Object.entries(piece.tree)){
+                    if(node.type==='needpayoff' && /^impl_/.test(nodeId) && !/_nfu$/.test(nodeId)){
+                        // severity of the underlying result
+                        const resultId = nodeId.replace(/^impl_/,'').replace(/_(hi|lo)$/,'');
+                        const res = piece.tree[resultId];
+                        if(!res) continue;
+                        const healthy = (res.level==='none' || res.level==='surface');
+                        if(healthy){ rep.healthyValueNodes++; if(node.leanHesitant) rep.taggedLean++; }
+                        else { rep.realValueNodes++; if(node.leanHesitant) rep.wronglyTagged++; }
+                    }
+                }
+            }
+            return rep;
+        }""")
+        check("Healthy Value nodes are all tagged lean-hesitant", r['healthyValueNodes']>0 and r['taggedLean']==r['healthyValueNodes'], str(r))
+        check("Real-problem Value nodes are NOT tagged lean-hesitant", r['wronglyTagged']==0, str(r))
+
+        print("\n=== Value engagement: healthy base leans non-committal, real problem stays positive ===")
+        r = page.evaluate("""() => {
+            const T = PIECE_BY_ID['mobile-security'].tree;
+            const pct = (node) => { let pos=0; for(let i=0;i<600;i++){ if(/Positive/.test(pickRevealedOption(node).label)) pos++; } return Math.round(pos/6); };
+            const healthy = T['impl_result_none_managed_full_lo'];
+            const hotKey = Object.keys(T).find(k=>/^impl_result_hot_.*_hi$/.test(k) && T[k].type==='needpayoff');
+            return { healthyPositivePct: pct(healthy), hotPositivePct: pct(T[hotKey]) };
+        }""")
+        check("Healthy base leans non-committal on Value (<45% positive)", r['healthyPositivePct'] < 45, str(r))
+        check("Real problem keeps positive lean on Value (>60% positive)", r['hotPositivePct'] > 60, str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")

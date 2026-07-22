@@ -265,6 +265,11 @@ function buildTrees(){
           newNodes[npId] = {
             type:'needpayoff',
             q: npQuestion,
+            // A no-pain base (none/surface) leans non-committal on the Value
+            // question — a customer with nothing pressing shouldn't usually read
+            // as a keen buyer. Real problems keep the positive lean. Based on the
+            // CONFIRMED problem severity, consistent with the frequency/impact fixes.
+            leanHesitant: severityBucket(base.level) === 'low',
             options:[
               {label:'Positive — engages with it, sees the value', engagement:'positive', next: npId+'_pos'},
               {label:'Hesitant — non-committal or deflects', engagement:'hesitant', next: npId+'_hes'}
