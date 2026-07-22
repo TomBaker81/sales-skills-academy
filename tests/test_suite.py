@@ -745,6 +745,42 @@ def main():
         check("Focus-area dropdown offers Any + all 10 areas", r.get('count')==11 and r['hasAny']==True, str(r))
         check("Focus-area dropdown covers every piece id", r.get('coversAllPieces')==True, str(r))
 
+        print("\n=== Voice: Irish-preferring, gender-matched selection ===")
+        r = page.evaluate("""() => {
+            // Stub getVoices with a realistic mixed set incl. Irish + UK + US.
+            const mk = (name, lang) => ({name, lang});
+            const setVoices = (list) => { window.speechSynthesis.getVoices = () => list; };
+            const orig = window.speechSynthesis.getVoices;
+            const out = {};
+
+            // 1) Irish female present -> female persona should get Moira (en-IE)
+            setVoices([mk('Google US English','en-US'), mk('Moira','en-IE'), mk('Microsoft Ryan Online (Natural)','en-GB')]);
+            out.femaleGetsIrish = (pickVoiceForGender('female')||{}).name;
+
+            // 2) Irish male present -> male persona should get the en-IE male
+            setVoices([mk('Connor','en-IE'), mk('Orla','en-IE'), mk('Google UK English Female','en-GB')]);
+            out.maleGetsIrishMale = (pickVoiceForGender('male')||{}).name;
+
+            // 3) No Irish voice -> fall back to English (UK), not null
+            setVoices([mk('Google UK English Female','en-GB'), mk('Google US English','en-US')]);
+            out.noIrishFallback = (pickVoiceForGender('female')||{}).name;
+
+            // 4) Only Irish voices, wrong gender available -> still returns an Irish voice (any-Irish fallback)
+            setVoices([mk('Moira','en-IE')]);
+            out.irishAnyGender = (pickVoiceForGender('male')||{}).name;
+
+            window.speechSynthesis.getVoices = orig;
+            return out;
+        }""")
+        check("Female persona picks the Irish voice (Moira) when present", r['femaleGetsIrish']=='Moira', str(r))
+        check("Male persona picks the Irish male voice (Connor) when present", r['maleGetsIrishMale']=='Connor', str(r))
+        check("Falls back to English when no Irish voice exists", r['noIrishFallback'] in ('Google UK English Female','Google US English'), str(r))
+        check("Prefers any Irish voice over non-Irish even on gender mismatch", r['irishAnyGender']=='Moira', str(r))
+
+        print("\n=== Hint timing: auto-hint delay is 2 minutes ===")
+        r = page.evaluate("() => HINT_NUDGE_MS")
+        check("Auto-hint delay raised to 120s", r == 120000, str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")

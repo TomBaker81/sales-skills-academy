@@ -1186,7 +1186,7 @@ const Coach = {
   active:false, mode:null, profile:null, messages:[], turnScores:[], ended:false, busy:false,
   usedHints:new Set(), hintNudgeTimer:null, inactivityEndTimer:null, conversationState: freshConversationState()
 };
-let HINT_NUDGE_MS = 60*1000;        // surface a fresh, stage-aware hint after 1 minute with no new message
+let HINT_NUDGE_MS = 120*1000;       // surface a fresh, stage-aware hint after 2 minutes with no new message (gives junior reps time to read + think before it nudges)
 let INACTIVITY_END_MS = 10*60*1000; // auto-score after 10 minutes with no new message
 
 /* =========================================================================
@@ -3271,15 +3271,24 @@ function pickVoiceForGender(gender){
   const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
   if(!voices.length) return null;
   const isEnglish = v => /^en/i.test(v.lang);
+  // Irish English specifically — matched on the BCP-47 tag (en-IE / en_IE) and,
+  // as a backstop, on the handful of known Irish voice names (Apple's "Moira"
+  // is the common real one; en-IE cloud voices like Orla/Emily/Connor appear on
+  // some setups). Most Windows/Chrome machines have no Irish voice at all, so
+  // this simply won't match there and we fall through to UK/other English.
+  const isIrish = v => /en[-_]?ie/i.test(v.lang) || /\b(moira|orla|emily|connor)\b/i.test(v.name);
   const nameHasAny = (v, list) => list.some(n => v.name.toLowerCase().includes(n));
   const isMale = v => (/male/i.test(v.name) && !/female/i.test(v.name)) || nameHasAny(v, KNOWN_VOICE_GENDER.male);
   const isFemale = v => /female/i.test(v.name) || nameHasAny(v, KNOWN_VOICE_GENDER.female);
   const matchesGender = v => gender === 'male' ? isMale(v) : isFemale(v);
-  // Prefer higher-quality "Natural"/"Neural"/"Online" voices (these exist on Edge/Windows and sound
-  // dramatically less robotic than the classic default engine) that also match gender, then fall back
-  // through progressively looser matches so there's always SOME voice, even on browsers/OSes without
-  // gender-labelled or Natural-quality options.
-  return voices.find(v => isEnglish(v) && matchesGender(v) && /natural|neural|online/i.test(v.name))
+  // Preference order: an Irish voice that also matches gender (best) -> any
+  // Irish voice regardless of gender -> then the previous English ladder
+  // (Natural/Neural gender match, Google gender match, any gender match, any
+  // Natural English, any Google English, any English, anything) so there's
+  // always SOME voice even where no Irish one exists.
+  return voices.find(v => isIrish(v) && matchesGender(v))
+    || voices.find(v => isIrish(v))
+    || voices.find(v => isEnglish(v) && matchesGender(v) && /natural|neural|online/i.test(v.name))
     || voices.find(v => isEnglish(v) && matchesGender(v) && /google/i.test(v.name))
     || voices.find(v => isEnglish(v) && matchesGender(v))
     || voices.find(v => isEnglish(v) && /natural|neural|online/i.test(v.name))
