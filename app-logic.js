@@ -409,7 +409,7 @@ loadSettings();
    APP STATE
    ========================================================================= */
 const App = {
-  view:'home', qual:{ pieceId:null, nodeId:'start', notes:[], gatePassed:false, revealedOption:null }, sessionLog:[], repName:'',
+  view:'home', qual:{ pieceId:null, nodeId:'start', notes:[], facts:{}, gatePassed:false, revealedOption:null }, sessionLog:[], repName:'',
   // Session-memory scoping: everything under App.qual and Coach (see below)
   // is deliberately kept as plain in-memory JS state, NOT written to
   // localStorage/sessionStorage — so it's scoped to a single browser tab's
@@ -2163,6 +2163,7 @@ function startPiece(pieceId){
   App.qual.pieceId = pieceId;
   App.qual.nodeId = 'start';
   App.qual.notes = [];
+  App.qual.facts = {};
   App.qual.gatePassed = false;
   App.qual.revealedOption = null;
   setView('qual');
@@ -2357,13 +2358,17 @@ function pickRevealedOption(node){
   // belong to): strongly correlate with what was already established,
   // rather than picking independently — a follow-up should usually
   // reinforce the same story, not flatly contradict it.
+  // Implication / Need-payoff follow-ups ALWAYS reinforce what was just
+  // established — these are additive "ask one more" questions, so consistency
+  // matters more than variety. This removes the old ~18% chance of a follow-up
+  // note that read as an unexplained downgrade.
   if(node.parentImpact){
     const reinforceIdx = node.parentImpact === 'high' ? node.reinforceIdx : (1 - node.reinforceIdx);
-    return Math.random() < 0.82 ? opts[reinforceIdx] : opts[1-reinforceIdx];
+    return opts[reinforceIdx];
   }
   if(node.parentEngagement){
     const reinforceIdx = node.parentEngagement === 'positive' ? node.reinforceIdx : (1 - node.reinforceIdx);
-    return Math.random() < 0.82 ? opts[reinforceIdx] : opts[1-reinforceIdx];
+    return opts[reinforceIdx];
   }
   // Primary Implication/Need-payoff reveal: the rep has already demonstrated
   // the skill being tested here by picking the right question at the gate,
@@ -2458,6 +2463,20 @@ function maybeCompellingEventNudge(note){
     App.qual.timingNudge = "\ud83d\udca1 That's a compelling event \u2014 something changing is the natural reason to act NOW rather than someday. Worth asking when it lands (\u201cwhen does that kick in?\u201d) and noting the date.";
   }
 }
+/* Confirmed-facts ledger: writes what the customer has actually established
+   so far, so later stages (and the summary) stay consistent with it. Purely
+   deterministic — the severity-bound follow-up options already guarantee no
+   contradiction; this ledger records the facts for consistency and future use. */
+function recordFacts(node, revealed){
+  if(!App.qual.facts) App.qual.facts = {};
+  const f = App.qual.facts;
+  if(revealed && revealed.freq) f.frequency = revealed.freq;
+  if(node){
+    if(node.type === 'problem' && revealed && revealed.impact) f.severity = revealed.impact;
+    if(node.parentImpact) f.scope = node.parentImpact;
+    if(node.parentEngagement) f.sentiment = node.parentEngagement;
+  }
+}
 function renderQualNode(){
   const piece = PIECE_BY_ID[App.qual.pieceId];
   const node = piece.tree[App.qual.nodeId];
@@ -2501,7 +2520,7 @@ function renderQualNode(){
         </div>
       </div>`;
     logResult(App.qual.pieceId, node.level);
-    el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; App.qual.gatePassed=false; App.qual.revealedOption=null; renderQualNode(); });
+    el('#btn-retry-piece').addEventListener('click', ()=>{ App.qual.nodeId='start'; App.qual.notes=[]; App.qual.facts={}; App.qual.gatePassed=false; App.qual.revealedOption=null; renderQualNode(); });
     if(pivotEligible){
       el('#btn-pivot-piece').addEventListener('click', ()=>{
         App.qual.pieceId = null;
@@ -2560,6 +2579,13 @@ function renderQualNode(){
         <span class="memory-panel-label">What you know so far</span>
         <ul>${App.qual.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>
       </div>` : '';
+    // Honest scoping: this is a guided drill on asking the right question in the
+    // right order. For a customer that reacts to your specific industry, role and
+    // company size, point reps to the Virtual Sales Call (shown once, at the start).
+    const contextHintHtml = (App.qual.nodeId === 'start') ? `
+      <div class="context-hint" style="font-size:11.5px;color:var(--ink-faint);line-height:1.5;margin:0 0 12px;padding:8px 12px;background:#F6F8FB;border:1px solid var(--line);border-radius:8px;">
+        This is guided practice — picking the right question, in the right order. For a customer who reacts to a specific industry, role and company size, try the <strong>Virtual Sales Call</strong>.
+      </div>` : '';
 
     if(!App.qual.gatePassed){
       if(!App.qual._gateChoices || App.qual._gateChoices.pieceId !== App.qual.pieceId || App.qual._gateChoices.nodeId !== App.qual.nodeId){
@@ -2574,7 +2600,7 @@ function renderQualNode(){
       body.innerHTML = `
         <div class="qcard">
           <div class="qtype-row"><span class="qtype-badge ${node.type}">${badgeLabel}</span></div>
-          ${memoryPanelHtml}
+          ${contextHintHtml}${memoryPanelHtml}
           <h3>What would you ask here?</h3>
           <div class="opt-list">
             ${choices.map((c,i)=>`<button class="opt-btn gate-opt-btn" data-idx="${i}"><span>"${esc(c.text)}"</span><span class="arrow">→</span></button>`).join('')}
@@ -2607,6 +2633,7 @@ function renderQualNode(){
         </div>`;
       el('#btn-gate-continue').addEventListener('click', ()=>{
         App.qual.notes.push(revealed.note || revealed.label);
+        recordFacts(node, revealed);
         maybeCompellingEventNudge(revealed.note);
         App.qual.nodeId = revealed.next;
         App.qual.gatePassed = false; App.qual.revealedOption = null;
@@ -3437,7 +3464,7 @@ function resetIdleSession(){
     Coach.active=false; Coach.mode=null; Coach.profile=null; Coach.messages=[]; Coach.turnScores=[];
     Coach.ended=false; Coach.conversationState = freshConversationState();
   }
-  App.qual = { pieceId:null, nodeId:'start', notes:[], gatePassed:false, revealedOption:null };
+  App.qual = { pieceId:null, nodeId:'start', notes:[], facts:{}, gatePassed:false, revealedOption:null };
   App.lastActivityAt = Date.now();
   setView('home');
 }

@@ -186,7 +186,9 @@ def main():
             for(let i=0;i<1000;i++){ if(pickRevealedOption(node).label==='wider') wider++; }
             return wider;
         }""")
-        check("Follow-up mostly reinforces parent=high (70-95%)", 700 <= corr <= 950, f"{corr}/1000")
+        # Option A: implication/need-payoff follow-ups now ALWAYS reinforce (was 82%),
+        # so a high-impact answer can never be followed by a contradicting note.
+        check("Follow-up always reinforces parent=high (100%)", corr == 1000, f"{corr}/1000")
 
         # ---------- 12. Data provenance: no hallucinated market-data claims in visible copy ----------
         print("\n=== Data provenance check ===")
@@ -780,6 +782,86 @@ def main():
         print("\n=== Hint timing: auto-hint delay is 2 minutes ===")
         r = page.evaluate("() => HINT_NUDGE_MS")
         check("Auto-hint delay raised to 120s", r == 120000, str(r))
+
+        print("\n=== Playbook Option A: frequency follow-up can never contradict a severe problem ===")
+        r = page.evaluate("""() => {
+            const report = { checkedPieces: 0, highBranches: 0, badReveals: 0, examples: [] };
+            for(const pid of PIECE_IDS){
+                const piece = PIECE_BY_ID[pid];
+                report.checkedPieces++;
+                for(const [nodeId,node] of Object.entries(piece.tree)){
+                    // A problem follow-up node bound to a QUALIFIED (high) result
+                    if(node.severityBound && /_pfu$/.test(nodeId)){
+                        // find its parent result severity via the impl_ target
+                        const implId = node.options[0].next; // impl_<resultId>
+                        const resultId = implId.replace(/^impl_/, '');
+                        const res = piece.tree[resultId];
+                        if(res && res.level === 'qualified'){
+                            report.highBranches++;
+                            // none of its revealed answers may imply low frequency
+                            for(const o of node.options){
+                                if(o.freq === 'rare' || o.freq === 'occasional' || /infrequent|rare|one-off/i.test(o.note||'')){
+                                    report.badReveals++;
+                                    report.examples.push(pid+':'+nodeId+' -> '+o.freq);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return report;
+        }""")
+        check("All 10 playbooks checked for severity-bound follow-ups", r['checkedPieces']==10, str(r))
+        check("High-severity problem branches exist and were checked", r['highBranches']>0, str(r))
+        check("ZERO severe-problem follow-ups can reveal an infrequent/rare answer", r['badReveals']==0, str(r['examples']))
+
+        print("\n=== Option A: high-severity follow-up still offers a genuine (non-downgrading) distinction ===")
+        r = page.evaluate("""() => {
+            // The 'high' bucket must offer a 'peak' nuance that is NOT a downgrade.
+            const set = FREQ_FOLLOWUP.high;
+            return {
+                twoOptions: set.options.length === 2,
+                hasConstant: set.options.some(o=>o.freq==='constant'),
+                hasPeak: set.options.some(o=>o.freq==='peak'),
+                noRare: !set.options.some(o=>o.freq==='rare'||o.freq==='occasional')
+            };
+        }""")
+        check("High bucket offers constant + peak nuance, no rare/occasional", r['twoOptions'] and r['hasConstant'] and r['hasPeak'] and r['noRare'], str(r))
+
+        print("\n=== Option A: implication & need-payoff follow-ups always reinforce (no downgrade) ===")
+        r = page.evaluate("""() => {
+            // parentImpact 'high' must always return the reinforcing option (reinforceIdx),
+            // never the containing one, across many draws.
+            const mkNode = (extra) => Object.assign({ options:[{label:'wider',x:'reinforce'},{label:'contained',x:'contain'}], reinforceIdx:0 }, extra);
+            let implContain=0, npContain=0;
+            for(let i=0;i<200;i++){
+                if(pickRevealedOption(mkNode({parentImpact:'high'})).x === 'contain') implContain++;
+                if(pickRevealedOption(mkNode({parentEngagement:'positive'})).x === 'contain') npContain++;
+            }
+            return { implContain, npContain };
+        }""")
+        check("Implication follow-up never contradicts a high-impact answer (0/200)", r['implContain']==0, str(r))
+        check("Need-payoff follow-up never contradicts a positive answer (0/200)", r['npContain']==0, str(r))
+
+        print("\n=== Option A: frequency intent de-duplicated (distractor removed from all pieces) ===")
+        r = page.evaluate("""() => {
+            let offenders = [];
+            for(const pid of PIECE_IDS){
+                const d = PIECE_BY_ID[pid].distractorQuestions.implication || [];
+                if(d.some(x=>/does that happen a lot/i.test(x.text))) offenders.push(pid);
+            }
+            return { offenders };
+        }""")
+        check("No piece still uses the frequency question as an implication distractor", len(r['offenders'])==0, str(r['offenders']))
+
+        print("\n=== Option A: facts ledger initialises and records ===")
+        r = page.evaluate("""() => {
+            App.qual = { pieceId:'connectivity-access', nodeId:'start', notes:[], facts:{}, gatePassed:false, revealedOption:null };
+            recordFacts({type:'problem'}, {freq:'constant'});
+            recordFacts({parentEngagement:'positive'}, {});
+            return { hasFacts: !!App.qual.facts, frequency: App.qual.facts.frequency, sentiment: App.qual.facts.sentiment };
+        }""")
+        check("Facts ledger records frequency and sentiment", r['frequency']=='constant' and r['sentiment']=='positive', str(r))
 
         browser.close()
 
