@@ -128,6 +128,28 @@ function severityBucket(level){
   if(level === 'developing') return 'med';
   return 'low'; // surface | none
 }
+/* Severity-appropriate implication reveal (Option A extension).
+   The problem answer locks in a result severity. A healthy/curious setup
+   (none/surface) must not then "confirm" real present cost, compliance or
+   public-trust exposure — that would contradict the problem answer just given.
+   So the low bucket offers only proportionate, impact-free answers (which route
+   to the _lo branch, where the wider-impact follow-up also stays "contained").
+   developing/qualified keep the full high/low choice so a genuinely real
+   problem can still escalate on impact. */
+const IMPL_REVEAL = {
+  high: [
+    { label: 'It adds up — real cost, time or risk', impact: 'high' },
+    { label: 'Manageable — not a big deal', impact: 'low' }
+  ],
+  med: [
+    { label: 'It adds up — real cost, time or risk', impact: 'high' },
+    { label: 'Manageable — not a big deal', impact: 'low' }
+  ],
+  low: [
+    { label: "No, it's genuinely fine as it stands", impact: 'low' },
+    { label: "Nothing pressing — though it's worth keeping half an eye on", impact: 'low' }
+  ]
+};
 function buildTrees(){
   PIECES.forEach(piece=>{
     const newNodes = {};
@@ -199,13 +221,17 @@ function buildTrees(){
           };
         }
 
+        const implSet = IMPL_REVEAL[severityBucket(base.level)];
         newNodes[implId] = {
           type:'implication',
           q: qText,
-          options:[
-            {label:'It adds up — real cost, time or risk', impact:'high', next: implId+'_hi'},
-            {label:'Manageable — not a big deal', impact:'low', next: implId+'_lo'}
-          ]
+          // Reveal options bound to the confirmed severity: a healthy/curious
+          // setup (none/surface) can never reveal "real cost, time or risk" —
+          // that would contradict the problem answer just given. Both low-bucket
+          // options route to the _lo branch, so the wider-impact follow-up there
+          // also stays "contained". Only developing/qualified can escalate.
+          severityBoundImpl: severityBucket(base.level),
+          options: implSet.map(o=>({label:o.label, impact:o.impact, next: implId + (o.impact==='high' ? '_hi' : '_lo')}))
         };
         ['hi','lo'].forEach(tag=>{
           const impact = tag==='hi' ? 'high' : 'low';

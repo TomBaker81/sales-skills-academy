@@ -863,6 +863,77 @@ def main():
         }""")
         check("Facts ledger records frequency and sentiment", r['frequency']=='constant' and r['sentiment']=='positive', str(r))
 
+        print("\n=== Option A extension: a healthy/curious base can never reveal 'real cost / compliance' impact ===")
+        r = page.evaluate("""() => {
+            const rep = { checkedPieces:0, healthyImplNodes:0, badHigh:0, badCompliance:0, examples:[] };
+            for(const pid of PIECE_IDS){
+                const piece = PIECE_BY_ID[pid];
+                rep.checkedPieces++;
+                for(const [nodeId,node] of Object.entries(piece.tree)){
+                    // primary implication node: impl_<resultId>, not a follow-up
+                    if(node.type==='implication' && /^impl_/.test(nodeId) && !/_ifu$/.test(nodeId)){
+                        const resultId = nodeId.replace(/^impl_/,'');
+                        const res = piece.tree[resultId];
+                        if(res && (res.level==='none' || res.level==='surface')){
+                            rep.healthyImplNodes++;
+                            // no high-impact option may be offered on a healthy base
+                            for(const o of node.options){
+                                if(o.impact==='high'){ rep.badHigh++; rep.examples.push(pid+':'+nodeId+' HIGH'); }
+                            }
+                            // simulate 200 reveals: none may mention real cost/compliance/trust
+                            for(let i=0;i<200;i++){
+                                const rv = pickRevealedOption(node);
+                                if(/real cost|adds up|compliance|public trust|time or risk/i.test(rv.label)){
+                                    rep.badCompliance++; break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return rep;
+        }""")
+        check("All 10 pieces scanned for healthy implication nodes", r['checkedPieces']==10, str(r))
+        check("Healthy/curious implication nodes exist and were checked", r['healthyImplNodes']>0, str(r))
+        check("No healthy base offers a high-impact implication option", r['badHigh']==0, str(r['examples']))
+        check("No healthy base can reveal a 'real cost/compliance' answer (200 draws each)", r['badCompliance']==0, str(r))
+
+        print("\n=== Option A extension: developing/qualified bases KEEP the ability to escalate ===")
+        r = page.evaluate("""() => {
+            let realProblemImplNodes=0, canEscalate=0;
+            for(const pid of PIECE_IDS){
+                const piece = PIECE_BY_ID[pid];
+                for(const [nodeId,node] of Object.entries(piece.tree)){
+                    if(node.type==='implication' && /^impl_/.test(nodeId) && !/_ifu$/.test(nodeId)){
+                        const res = piece.tree[nodeId.replace(/^impl_/,'')];
+                        if(res && (res.level==='developing' || res.level==='qualified')){
+                            realProblemImplNodes++;
+                            if(node.options.some(o=>o.impact==='high')) canEscalate++;
+                        }
+                    }
+                }
+            }
+            return { realProblemImplNodes, canEscalate };
+        }""")
+        check("Real-problem implication nodes still offer a high-impact option", r['realProblemImplNodes']>0 and r['canEscalate']==r['realProblemImplNodes'], str(r))
+
+        print("\n=== Regression: the exact user-reported 'fully enrolled' chain is now coherent ===")
+        r = page.evaluate("""() => {
+            const T = PIECE_BY_ID['mobile-security'].tree;
+            // fully enrolled -> result_none_managed_full (level none)
+            const implNode = T['impl_result_none_managed_full'];
+            const freqNode = T['result_none_managed_full_pfu'];
+            const out = { implOptions: implNode.options.map(o=>o.label), implImpacts: implNode.options.map(o=>o.impact),
+                          freqOptions: freqNode.options.map(o=>o.freq) };
+            // walk the _lo implication follow-up to confirm it stays 'contained'
+            const ifu = T['impl_result_none_managed_full_lo_ifu'];
+            out.loFollowUpReveal = ifu ? pickRevealedOption(ifu).label : '(no ifu)';
+            return out;
+        }""")
+        check("Fully-enrolled implication offers only proportionate (no high) impact", 'high' not in r['implImpacts'], str(r['implImpacts']))
+        check("Fully-enrolled frequency stays occasional/rare", set(r['freqOptions'])<=set(['occasional','rare']), str(r['freqOptions']))
+        check("Fully-enrolled wider-impact follow-up stays contained (not compliance/trust)", 'contained' in r['loFollowUpReveal'].lower() or 'whole picture' in r['loFollowUpReveal'].lower() or "that's really it" in r['loFollowUpReveal'].lower(), str(r['loFollowUpReveal']))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")
