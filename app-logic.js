@@ -1272,11 +1272,15 @@ async function callGeminiOnce(system, messages, maxTokens){
   // Newer Gemini models "think" by default, and those internal reasoning
   // tokens are drawn from the SAME maxOutputTokens budget as the visible
   // answer — with a small budget, thinking alone can consume it all, leaving
-  // nothing for the actual JSON we need. thinkingBudget:0 disables that for
-  // these structured-output calls (we don't need chain-of-thought here), and
-  // padding the token budget is a second safety margin for models/params
-  // that don't fully honor thinkingBudget.
-  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:Math.max(maxTokens, 3072), thinkingConfig:{thinkingBudget:0}} };
+  // nothing for the actual JSON we need. Older models accepted
+  // thinkingBudget:0 to disable it entirely, but the current
+  // gemini-flash-latest generation (gemini-3.6-flash at time of writing)
+  // REJECTS 0 with a 400 INVALID_ARGUMENT — thinking can no longer be fully
+  // disabled, only capped. 128 is the accepted minimum-style cap: verified
+  // live (July 2026) to return 200 + clean JSON, keeping the reasoning
+  // overhead tiny and predictable. The padded token budget remains a second
+  // safety margin so capped thinking still can't starve the visible output.
+  const body = { model: Settings.model, apiKey: Settings.apiKey, system_instruction:{parts:[{text:system}]}, contents:contents, generationConfig:{maxOutputTokens:Math.max(maxTokens, 3072), thinkingConfig:{thinkingBudget:128}} };
 
   // Google's Gemini API does not send CORS headers on generateContent, so it
   // can't be called directly from a browser on any domain. The Netlify
