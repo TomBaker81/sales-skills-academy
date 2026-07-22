@@ -23,6 +23,11 @@
       <label style="display:block;font-size:12.5px;font-weight:700;color:#1B1640;margin-bottom:5px;">Password</label>
       <input type="password" id="login-pass" autocomplete="off" style="width:100%;padding:10px 12px;border:1.5px solid #E5DFF5;border-radius:10px;font-size:14px;box-sizing:border-box;">
     </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:12.5px;font-weight:700;color:#1B1640;margin-bottom:5px;">Manager password <span style="font-weight:400;color:#8A8FA0;">(optional)</span></label>
+      <input type="password" id="login-mgr-pass" autocomplete="off" style="width:100%;padding:10px 12px;border:1.5px solid #E5DFF5;border-radius:10px;font-size:14px;box-sizing:border-box;">
+      <div style="font-size:11px;color:#8A8FA0;margin-top:4px;line-height:1.4;">Leave blank for standard rep access. Enter it to unlock the Management area (Manager Report and AI settings).</div>
+    </div>
     <button id="login-submit" style="width:100%;padding:12px;border:none;border-radius:99px;background:#0A825A;color:#171B2A;font-weight:700;font-size:14px;cursor:pointer;">Sign In</button>
     <div id="login-error" style="display:none;color:#C21F3E;font-size:12.5px;margin-top:10px;"></div>
   </div>
@@ -395,6 +400,7 @@
       <button class="btn btn-primary btn-sm" id="btn-settings-save">Save</button>
       <button class="btn btn-outline btn-sm" id="btn-settings-test">Test Connection</button>
       <button class="btn btn-ghost btn-sm" id="btn-settings-clear">Clear Key</button>
+      <button class="btn btn-outline btn-sm" id="btn-settings-reset-server">Reset to server key</button>
     </div>
     <div class="settings-status" id="settings-status"></div>
 

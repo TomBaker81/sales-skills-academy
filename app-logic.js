@@ -2674,6 +2674,22 @@ el('#btn-settings-clear').addEventListener('click', ()=>{
   showSettingsStatus('Key cleared for '+PROVIDER_DEFAULTS[provider].label+'.', true);
 });
 
+el('#btn-settings-reset-server').addEventListener('click', ()=>{
+  // Wipe any locally-saved keys and fall back to the shared server Gemini key.
+  // This is the one-click fix for a machine where a stale or wrong key was
+  // ever saved (the cause of a real 'API key not valid' outage).
+  ['anthropic','openai','gemini'].forEach(p=> safeStorageRemove('qc_key_'+p));
+  Settings.provider = 'gemini';
+  Settings.apiKey = EMBEDDED_GEMINI_KEY;
+  Settings.model = PROVIDER_DEFAULTS.gemini.model;
+  safeStorageSet('qc_provider','gemini');
+  el('#settings-key').value = EMBEDDED_GEMINI_KEY;
+  el('#settings-model').value = Settings.model;
+  els('.provider-opt').forEach(b=> b.classList.toggle('active', b.dataset.provider==='gemini'));
+  updateHeaderModePill();
+  showSettingsStatus('Reset to the server key — this browser now uses the shared server Gemini key.', true);
+});
+
 el('#btn-settings-test').addEventListener('click', async ()=>{
   const provider = selectedProvider();
   const key = el('#settings-key').value.trim();
@@ -4243,7 +4259,32 @@ el('#btn-modal-close').addEventListener('click', closeModal);
 el('#modal-backdrop').addEventListener('click', (e)=>{ if(e.target.id==='modal-backdrop') closeModal(); });
 
 /* =========================================================================
+   ACCESS CONTROL
+   Management (Manager Report + AI settings) is unlocked only when the manager
+   password was entered on the login screen (validated server-side, token in
+   sessionStorage). Reps never manage API keys: their browser always uses the
+   shared server key, and any locally-saved key is stripped so a stale/bad one
+   can never override it (this was a real production bug).
+   ========================================================================= */
+function applyAccessControl(){
+  let isManager = false;
+  try{ isManager = sessionStorage.getItem('ssa_is_manager') === '1'; }catch(e){}
+  App.isManager = isManager;
+  if(!isManager){
+    ['anthropic','openai','gemini'].forEach(p=> safeStorageRemove('qc_key_'+p));
+    Settings.provider = 'gemini';
+    Settings.apiKey = EMBEDDED_GEMINI_KEY;
+    Settings.model = PROVIDER_DEFAULTS.gemini.model;
+    const mgrTab = document.querySelector('[data-view="manager"]'); if(mgrTab) mgrTab.style.display = 'none';
+    ['#btn-open-settings','#btn-open-settings-2'].forEach(id=>{ const b=el(id); if(b) b.style.display='none'; });
+    if(App.view==='manager') setView('home');
+  }
+  if(typeof updateHeaderModePill==='function') updateHeaderModePill();
+}
+
+/* =========================================================================
    INIT
    ========================================================================= */
+applyAccessControl();
 renderHome();
 setView('home');
