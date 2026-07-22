@@ -707,6 +707,44 @@ def main():
         check("Payload timing fields shaped correctly", r['timingAsks'] == 2 and r['timingScore'] == 3, str(r))
         check("piecesDiscovered is an array", r['piecesType'] == True, str(r))
 
+        print("\n=== Focus-area target: offline picker ===")
+        r = page.evaluate("""() => {
+            const runs = [];
+            for(let i=0;i<25;i++){
+                const p = pickFocusAreaFallback('mobile-security', 'warm', null, null, null);
+                const sev = p.hiddenPains.slice().sort((a,b)=>(SEVERITY_RANK[b.severity]||0)-(SEVERITY_RANK[a.severity]||0))[0];
+                runs.push({ hasFocus: p.hiddenPains.some(hp=>hp.piece==='mobile-security'), leadIsFocus: sev && sev.piece==='mobile-security' });
+            }
+            return {
+                allHaveFocus: runs.every(x=>x.hasFocus),
+                allLeadFocus: runs.every(x=>x.leadIsFocus),
+                connLead: (()=>{ let ok=0; for(let i=0;i<25;i++){ const p=pickFocusAreaFallback('connectivity-access','warm',null,null,null); const s=p.hiddenPains.slice().sort((a,b)=>(SEVERITY_RANK[b.severity]||0)-(SEVERITY_RANK[a.severity]||0))[0]; if(s&&s.piece==='connectivity-access')ok++; } return ok; })()
+            };
+        }""")
+        check("Focus-area offline profile always contains the chosen area", r['allHaveFocus']==True, str(r))
+        check("Focus-area offline profile leads with the chosen area (mobile)", r['allLeadFocus']==True, str(r))
+        check("Focus-area offline leads with the chosen area (connectivity, all 25)", r['connLead']==25, str(r))
+
+        print("\n=== Focus-area target: graceful fallback for an area no fixed profile leads ===")
+        r = page.evaluate("""() => {
+            // Even an area that may not headline any fixed profile must still return a runnable profile.
+            const p = pickFocusAreaFallback('support-services', 'warm', null, null, null);
+            return { runnable: !!(p && p.persona && Array.isArray(p.hiddenPains) && p.hiddenPains.length>0), hasHints: Array.isArray(p.hints) && p.hints.length>0 };
+        }""")
+        check("Focus-area fallback still returns a runnable profile for any area", r['runnable']==True, str(r))
+        check("Focus-area fallback profile has hints", r['hasHints']==True, str(r))
+
+        print("\n=== Focus-area selector: all 10 areas populated in the dropdown ===")
+        r = page.evaluate("""() => {
+            const sel = document.querySelector('#scenario-focus-select');
+            if(!sel) return {present:false};
+            const opts = [...sel.options].map(o=>o.value);
+            return { present:true, count: opts.length, hasAny: opts.includes(''), coversAllPieces: PIECE_IDS.every(id=>opts.includes(id)) };
+        }""")
+        check("Focus-area dropdown is present", r['present']==True, str(r))
+        check("Focus-area dropdown offers Any + all 10 areas", r.get('count')==11 and r['hasAny']==True, str(r))
+        check("Focus-area dropdown covers every piece id", r.get('coversAllPieces')==True, str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")

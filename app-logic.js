@@ -2982,6 +2982,30 @@ function pickFallbackProfile(difficulty, industry, role, size){
    asks as a win either way). Junior-friendly by design — the drill defaults
    to the Guided persona so the contact stays pleasant while deflecting. */
 const SEVERITY_RANK = { high: 3, medium: 2, low: 1 };
+/* Focus-area target — offline picker. When the rep chooses a specific focus
+   area to practise, guarantee the offline persona leads with a hidden pain in
+   that area (still hidden — the rep must uncover it), with the other pains left
+   intact for realism. Falls back gracefully to the normal weighted pick if no
+   fixed profile happens to carry that area, so the call always runs. */
+function pickFocusAreaFallback(focusPiece, difficulty, industry, role, size){
+  const matching = FALLBACK_PROFILES.filter(p => (p.difficulty||'warm') === difficulty);
+  const pool = matching.length ? matching : FALLBACK_PROFILES;
+  const severest = p => p.hiddenPains.slice().sort((a,b)=>(SEVERITY_RANK[b.severity]||0)-(SEVERITY_RANK[a.severity]||0))[0];
+  let candidates = pool.filter(p => { const s = severest(p); return s && s.piece === focusPiece; });
+  if(!candidates.length) candidates = pool.filter(p => p.hiddenPains.some(hp => hp.piece === focusPiece));
+  if(!candidates.length) return pickFallbackProfile(difficulty, industry, role, size);
+  const chosen = candidates[Math.floor(Math.random()*candidates.length)];
+  const profile = JSON.parse(JSON.stringify(chosen));
+  if(!Array.isArray(profile.hints) || !profile.hints.length) profile.hints = genericHints(profile);
+  // If we matched on "contains" rather than "leads", promote the focus pain to
+  // the most severe so it's genuinely the lead the rep is meant to uncover.
+  const sev = profile.hiddenPains.slice().sort((a,b)=>(SEVERITY_RANK[b.severity]||0)-(SEVERITY_RANK[a.severity]||0))[0];
+  if(sev && sev.piece !== focusPiece){
+    const fp = profile.hiddenPains.find(hp=>hp.piece===focusPiece);
+    if(fp) fp.severity = 'high';
+  }
+  return profile;
+}
 function pickWrongRoomFallback(difficulty, drillRole, industry, size){
   const strong = (ROLE_KNOWLEDGE_PROFILE[drillRole] || {strongAreas:[]}).strongAreas;
   const matching = FALLBACK_PROFILES.filter(p => (p.difficulty||'warm') === difficulty);
@@ -3053,15 +3077,23 @@ async function newScenario(){
   const drillRole = App.wrongRoomDrill
     ? (selectedRole || WRONG_ROOM_ROLES[Math.floor(Math.random()*WRONG_ROOM_ROLES.length)])
     : selectedRole;
+  // Focus-area target (optional): the area the rep wants to practise. It becomes
+  // the guaranteed LEAD hidden pain, still hidden for the rep to uncover.
+  const selectedFocus = el('#scenario-focus-select') ? (el('#scenario-focus-select').value || null) : null;
+  App.focusArea = selectedFocus;
+  // Single source of truth for the offline pick, honouring drill > focus > normal.
+  const pickOffline = () => App.wrongRoomDrill
+    ? pickWrongRoomFallback(difficulty, drillRole, selectedIndustry, selectedSize)
+    : (selectedFocus
+        ? pickFocusAreaFallback(selectedFocus, difficulty, selectedIndustry, selectedRole, selectedSize)
+        : pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize));
   let profile = null, mode = 'ai';
   if(!Settings.apiKey){
     mode = 'offline';
-    profile = App.wrongRoomDrill
-      ? pickWrongRoomFallback(difficulty, drillRole, selectedIndustry, selectedSize)
-      : pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize);
+    profile = pickOffline();
   } else {
-    try{ profile = await generateProfileViaAPI(difficulty, selectedIndustry, drillRole, selectedSize, App.wrongRoomDrill); }
-    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = App.wrongRoomDrill ? pickWrongRoomFallback(difficulty, drillRole, selectedIndustry, selectedSize) : pickFallbackProfile(difficulty, selectedIndustry, selectedRole, selectedSize); }
+    try{ profile = await generateProfileViaAPI(difficulty, selectedIndustry, drillRole, selectedSize, App.wrongRoomDrill, selectedFocus); }
+    catch(err){ console.error('generateProfileViaAPI failed, falling back to offline mode:', err); mode='offline'; profile = pickOffline(); }
   }
   // Enforce the drill role client-side even in AI mode — the prompt asks
   // for it, but a schema-level guarantee beats trusting the model.
@@ -3339,6 +3371,11 @@ function populateScenarioSelectors(){
   el('#scenario-difficulty-select').addEventListener('change', (e)=>{
     App.context.difficulty = e.target.value || 'warm';
   });
+  const focusSel = el('#scenario-focus-select');
+  if(focusSel){
+    PIECES.forEach(p => { focusSel.innerHTML += `<option value="${esc(p.id)}">${p.icon} ${esc(p.name)}</option>`; });
+    focusSel.addEventListener('change', ()=>{ App.focusArea = focusSel.value || null; });
+  }
 }
 function syncContextSelectors(){
   // Keep both sets of selectors (Virtual Sales Call + Focus Area Playbooks)
@@ -3603,7 +3640,8 @@ const SME_SECTOR_POOL = [
   "Car dealership group", "Motor repair/garage chain", "Agricultural machinery dealer", "Dairy/agri-food producer", "Fishing/seafood processor",
   "Waste management firm", "Facilities management company", "Security services firm", "Catering company", "Event management firm"
 ];
-async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole, selectedSize, wrongRoomDrill){
+async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole, selectedSize, wrongRoomDrill, selectedFocus){
+  const focusName = (selectedFocus && PIECE_BY_ID[selectedFocus]) ? PIECE_BY_ID[selectedFocus].name : selectedFocus;
   difficulty = difficulty || 'warm';
   const suggestedSector = selectedIndustry || SME_SECTOR_POOL[Math.floor(Math.random()*SME_SECTOR_POOL.length)];
   const propensityAreas = (selectedIndustry || selectedRole || selectedSize) ? propensityAreasFor(selectedIndustry, selectedRole, selectedSize) : null;
@@ -3625,7 +3663,7 @@ async function generateProfileViaAPI(difficulty, selectedIndustry, selectedRole,
  "description": string (two short sentences giving real operational texture — number of sites, type of customers, general shape of day-to-day operations — enough to reasonably suggest relevant technology needs, e.g. multiple sites implies inter-site connectivity, guest-facing implies guest Wi-Fi and physical security, a mobile workforce implies device management. Do NOT state any of the specific hidden pains directly or name specific systems/vendors),
  "whatTheyCareAbout": string (one short sentence naming the REAL business priorities a person in this role, at this kind of company, actually cares about day to day — e.g. for a hotel owner: guest reviews and repeat bookings; for a healthcare practice: patient trust and appointment continuity; for a logistics firm: on-time delivery and driver safety; for professional services: client retention and reputation. This grounds the persona in business outcomes, not IT jargon, and should subtly shape how they talk about the hidden pains — always in terms of what it costs THEM, not abstract technology language),
  "persona": {"name": string (Irish-sounding full name — draw from a genuinely wide range of common Irish first names and surnames, not the same few every time), "gender": "male"|"female" (matching the first name, used to pick an appropriate voice for text-to-speech), "role": one of ["Owner/Founder","IT Manager","Office Manager","Finance Director (C-level)","Operations Director (C-level)"]${selectedRole ? ` — the rep has specifically chosen to practice against a "${selectedRole}" contact, so use exactly this role` : ''}, "category": one of ["Owner","IT/Technical","C-Level","Other"], "tone": short description of how they talk},
- "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away.${propensityAreas ? ` Given the chosen industry/role/size, these focus areas have the highest real-world propensity for this combination and at least one hidden pain (ideally the most severe one) should come from this list: [${propensityAreas.map(a=>'"'+a+'"').join(', ')}] — but include at least one other area too, since a real business rarely has just one issue,` : ''}${roleProfile ? ` IMPORTANT — since the contact is specifically a "${selectedRole}": at least one hidden pain should be something this role would plausibly know about and be able to discuss (their natural strong areas are: [${roleProfile.strongAreas.map(a=>'"'+a+'"').join(', ')}]) — a Finance Director realistically won't know firewall configuration detail, an Office Manager realistically won't own security strategy, and so on. It's fine and realistic to ALSO include a hidden pain outside their direct ownership (e.g. security, if they're not IT) as long as the description/detail makes clear they'd need to defer or refer the rep elsewhere on that one specifically,` : ''}${wrongRoomDrill ? ` WRONG-ROOM TRAINING DRILL — override the usual balance: the MOST SEVERE hidden pain must sit clearly OUTSIDE this contact's ownership areas, so a rep who probes it well discovers this contact genuinely cannot answer in depth. The persona stays friendly and helpful throughout, openly names WHO in the business does own that area when asked (a named colleague or an external IT provider), and happily offers an introduction if the rep asks for one. This is a training exercise in recognising the wrong contact — the persona should never fake expertise it would not have,` : ''}
+ "hiddenPains": array of 2 to 4 objects {"piece": one of [${PIECE_IDS.map(id=>'"'+id+'"').join(', ')}], "severity": "low"|"medium"|"high", "detail": short internal note of the real underlying pain, not to be revealed unless asked well}. At least one hidden pain is required, and at least one must be specific and concrete enough that a well-run discovery call can fully qualify it. Where it fits naturally, let at least one hidden pain connect to the kind of technology need the industry and description already hint at (e.g. a hotel with a guest Wi-Fi hint pairing with a secure-network or managed-security pain), AND connect to "whatTheyCareAbout" (e.g. a hotel's guest Wi-Fi problem should tie back to guest reviews/experience, not just "the network is unreliable") — the hint should make the pain findable, not give it away.${propensityAreas ? ` Given the chosen industry/role/size, these focus areas have the highest real-world propensity for this combination and at least one hidden pain (ideally the most severe one) should come from this list: [${propensityAreas.map(a=>'"'+a+'"').join(', ')}] — but include at least one other area too, since a real business rarely has just one issue,` : ''}${roleProfile ? ` IMPORTANT — since the contact is specifically a "${selectedRole}": at least one hidden pain should be something this role would plausibly know about and be able to discuss (their natural strong areas are: [${roleProfile.strongAreas.map(a=>'"'+a+'"').join(', ')}]) — a Finance Director realistically won't know firewall configuration detail, an Office Manager realistically won't own security strategy, and so on. It's fine and realistic to ALSO include a hidden pain outside their direct ownership (e.g. security, if they're not IT) as long as the description/detail makes clear they'd need to defer or refer the rep elsewhere on that one specifically,` : ''}${(wrongRoomDrill && !selectedFocus) ? ` WRONG-ROOM TRAINING DRILL — override the usual balance: the MOST SEVERE hidden pain must sit clearly OUTSIDE this contact's ownership areas, so a rep who probes it well discovers this contact genuinely cannot answer in depth. The persona stays friendly and helpful throughout, openly names WHO in the business does own that area when asked (a named colleague or an external IT provider), and happily offers an introduction if the rep asks for one. This is a training exercise in recognising the wrong contact — the persona should never fake expertise it would not have,` : ''}${(selectedFocus && !wrongRoomDrill) ? ` FOCUS-AREA TRAINING TARGET — the MOST SEVERE (lead) hidden pain MUST have "piece": "${selectedFocus}" (${focusName}), specific and concrete enough that a well-run discovery call can fully qualify it. Include 1 to 2 ADDITIONAL hidden pains from OTHER focus areas so the business feels real. Keep the target pain HIDDEN exactly like any other — do NOT volunteer it or hint at it in the opening line; the rep must uncover it through good discovery. All the usual question-quality and scoring standards still apply,` : ''}${(selectedFocus && wrongRoomDrill) ? ` FOCUS-AREA + WRONG-ROOM DRILL — the MOST SEVERE (lead) hidden pain MUST have "piece": "${selectedFocus}" (${focusName}) AND must sit clearly OUTSIDE this contact's ownership areas, so a rep who probes it well finds this friendly contact genuinely cannot answer it in depth and should be referred on. The persona stays warm, names WHO actually owns that area when asked, and offers an introduction. Include 1 to 2 other hidden pains for realism, and keep everything hidden — the rep must uncover it,` : ''}
  "openingLine": string, must be ONLY a short, simple way of answering an incoming phone call \u2014 like "Hello?", "Hello, [Name] speaking", or "[Company name], hello" \u2014 nothing more. Do NOT include any context, availability, tone-setting, or hint about being busy/receptive/rushed \u2014 the rep hasn't spoken yet, so the persona has no idea who's calling or why. Save all tone and personality for how they respond AFTER the rep's first message,
  "hints": array of exactly 5 objects {"type": "news"|"question"|"nudge", "text": string} to help a junior rep who gets stuck on this call:
    - exactly 1 of type "news": a plausible, general (not fabricated specific/false) industry news angle relevant to this sector that could open a conversation, e.g. "Ransomware attacks on small hospitality businesses have been widely reported recently — worth raising as a natural opener." Keep it generic/plausible, not a specific invented headline or company,
