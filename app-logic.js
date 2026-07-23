@@ -3194,16 +3194,59 @@ async function newScenario(){
 }
 el('#btn-new-scenario').addEventListener('click', newScenario);
 
+/* Leave the current call and go back to the Virtual Sales Call setup screen so
+   the rep can choose preferences for the next call, instead of silently
+   regenerating with whatever was selected last time.
+
+   IMPORTANT: this NEVER scores. A score is only ever produced and submitted by
+   endScenario(), which runs only when the rep presses "Score Me Now" or the
+   inactivity timer wraps the call up automatically. Walking away from a call
+   this way puts nothing on the leaderboard. */
+function returnToSetup(){
+  // Invalidate any scenario generation still in flight, so a late response
+  // can't drop the rep back into an active call they just left (the existing
+  // generation-token guard discards a superseded response).
+  App.scenarioGeneration = (App.scenarioGeneration || 0) + 1;
+  clearTimeout(Coach.hintNudgeTimer);
+  clearTimeout(Coach.inactivityEndTimer);
+  stopListening();
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  Coach.active = false;
+  Coach.ended = true;               // nothing may score this abandoned call
+  Coach.mode = null;
+  Coach.profile = null;
+  Coach.messages = [];
+  Coach.turnScores = [];
+  Coach.usedHints = new Set();
+  Coach.conversationState = freshConversationState();
+
+  el('#coach-active').classList.add('hidden');
+  el('#coach-idle').classList.remove('hidden');
+  ['btn-new-scenario','btn-refresh-scenario','btn-refresh-scenario-2'].forEach(id=>{
+    const b = el('#'+id); if(b) b.disabled = false;
+  });
+  el('#btn-new-scenario').textContent = 'Generate New Scenario →';
+  // Re-enable the chat controls, which endScenario() disables, so the next
+  // call starts in a clean state.
+  ['#chat-input','#btn-send','#btn-hint'].forEach(id=>{ const c = el(id); if(c) c.disabled = false; });
+  // Selections stay visible and editable on the setup screen (industry/role/
+  // size are shared with Focus Area Playbooks via App.context, so they are
+  // deliberately not wiped here).
+  syncContextSelectors();
+}
+
 function refreshScenario(){
   const inProgress = Coach.active && !Coach.ended && Coach.messages.some(m=>m.who==='rep');
-  if(inProgress && !confirm('Start a new scenario? This will discard the current conversation and its score.')){
+  if(inProgress && !confirm('Start a new call?\n\nThis discards the current conversation WITHOUT scoring it. If you want this call on the leaderboard, cancel and press "Score Me Now" first.')){
     return;
   }
-  newScenario();
+  returnToSetup();
 }
 el('#btn-refresh-scenario').addEventListener('click', refreshScenario);
 el('#btn-refresh-scenario-2').addEventListener('click', refreshScenario);
-el('#btn-modal-new').addEventListener('click', ()=>{ closeModal(); newScenario(); });
+// After the scorecard, "Start New Scenario" also returns to setup — the call
+// just ended has already been scored and submitted by endScenario().
+el('#btn-modal-new').addEventListener('click', ()=>{ closeModal(); returnToSetup(); });
 
 function initials(name){ return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 function sizeBand(employees){
@@ -3466,8 +3509,10 @@ const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 });
 function resetIdleSession(){
   if(Coach.active){
-    Coach.active=false; Coach.mode=null; Coach.profile=null; Coach.messages=[]; Coach.turnScores=[];
-    Coach.ended=false; Coach.conversationState = freshConversationState();
+    // returnToSetup() clears the same state AND restores the setup panel —
+    // previously this cleared state but left the active-call view on screen,
+    // so returning to the tab showed an empty, dead conversation.
+    returnToSetup();
   }
   App.qual = { pieceId:null, nodeId:'start', notes:[], facts:{}, gatePassed:false, revealedOption:null };
   App.lastActivityAt = Date.now();

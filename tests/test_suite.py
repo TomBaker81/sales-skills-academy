@@ -967,6 +967,55 @@ def main():
         check("Healthy base leans non-committal on Value (<45% positive)", r['healthyPositivePct'] < 45, str(r))
         check("Real problem keeps positive lean on Value (>60% positive)", r['hotPositivePct'] > 60, str(r))
 
+        print("\n=== Virtual Sales Call: 'New Scenario' returns to setup and never scores ===")
+        r = page.evaluate("""() => {
+            // Simulate an in-progress call, then leave it via returnToSetup().
+            let submits = 0;
+            const origSubmit = Leaderboard.submitScore;
+            Leaderboard.submitScore = async () => { submits++; return {ok:true}; };
+            Coach.active = true; Coach.ended = false; Coach.mode = 'offline';
+            Coach.profile = {companyName:'Test Co', persona:{name:'Test', role:'Owner'}};
+            Coach.messages = [{who:'rep', text:'a question'}];
+            Coach.turnScores = [{}];
+            document.querySelector('#coach-idle').classList.add('hidden');
+            document.querySelector('#coach-active').classList.remove('hidden');
+            document.querySelector('#chat-input').disabled = true;
+
+            returnToSetup();
+
+            const out = {
+              submits,
+              idleShown:  !document.querySelector('#coach-idle').classList.contains('hidden'),
+              activeHidden: document.querySelector('#coach-active').classList.contains('hidden'),
+              coachActive: Coach.active,
+              profileCleared: Coach.profile === null,
+              messagesCleared: Coach.messages.length === 0,
+              chatReenabled: document.querySelector('#chat-input').disabled === false,
+              genBtnLabel: document.querySelector('#btn-new-scenario').textContent,
+              genBtnEnabled: document.querySelector('#btn-new-scenario').disabled === false
+            };
+            Leaderboard.submitScore = origSubmit;
+            return out;
+        }""")
+        check("Leaving a call submits NOTHING to the leaderboard", r['submits']==0, str(r))
+        check("Returns to the setup screen (idle shown, active hidden)", r['idleShown'] and r['activeHidden'], str(r))
+        check("Call state fully cleared (inactive, profile+messages gone)", (not r['coachActive']) and r['profileCleared'] and r['messagesCleared'], str(r))
+        check("Setup screen is ready for a fresh call (controls re-enabled)", r['chatReenabled'] and r['genBtnEnabled'] and 'Generate' in r['genBtnLabel'], str(r))
+
+        print("\n=== Scoring stays limited to 'Score Me Now' and the inactivity timeout ===")
+        r = page.evaluate("""() => ({
+            refreshGoesToSetup: /returnToSetup\\(\\)/.test(refreshScenario.toString()),
+            refreshDoesNotRegenerate: !/newScenario\\(\\)/.test(refreshScenario.toString()),
+            inactivityStillAutoScores: /endScenario\\(\\)/.test(resetInactivityTimers.toString()),
+            // strip comments first — returnToSetup's comments legitimately MENTION
+            // endScenario/submitScore to explain that it never calls them.
+            returnToSetupNeverScores: !/endScenario|submitScore/.test(
+                returnToSetup.toString().replace(/\\/\\*[\\s\\S]*?\\*\\//g,'').replace(/\\/\\/.*$/gm,''))
+        })""")
+        check("In-call 'New Scenario' returns to setup (does not regenerate)", r['refreshGoesToSetup'] and r['refreshDoesNotRegenerate'], str(r))
+        check("Inactivity timeout still auto-scores the call", r['inactivityStillAutoScores'], str(r))
+        check("returnToSetup never triggers scoring", r['returnToSetupNeverScores'], str(r))
+
         browser.close()
 
     print(f"\n{'='*50}\nTOTAL: {results['pass']} passed, {results['fail']} failed\n{'='*50}")
